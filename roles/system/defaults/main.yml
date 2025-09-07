@@ -1,0 +1,14 @@
+---
+essential_packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - unzip
+  - ca-certificates
+  - apt-transport-https
+  - gnupg
+  - lsb-release
+
+system_users: []

@@ -1,0 +1,156 @@
+---
+- name: Add user to sudo group
+  user:
+    name: "{{ rootless_user_name }}"
+    groups: sudo
+    append: yes
+  become: true
+
+- name: Check if passwordless sudo is already configured
+  shell: "sudo -l -U {{ rootless_user_name }} | grep -q 'NOPASSWD'"
+  register: passwordless_sudo_check
+  failed_when: false
+  changed_when: false
+  become: true
+
+- name: Ask user about passwordless sudo
+  pause:
+    prompt: |
+
+      Sudo Configuration for '{{ rootless_user_name }}'
+      ─────────────────────────────────────────────────
+      Would you like to enable passwordless sudo?
+      This allows running sudo commands without password prompts.
+
+      Enter 'y' for yes, 'n' for no [default: n]
+  register: passwordless_sudo_choice
+  when: passwordless_sudo_check.rc != 0
+
+- name: Configure passwordless sudo
+  lineinfile:
+    path: /etc/sudoers.d/{{ rootless_user_name }}
+    line: "{{ rootless_user_name }} ALL=(ALL) NOPASSWD:ALL"
+    create: yes
+    mode: "0440"
+    validate: "visudo -cf %s"
+  become: true
+  when:
+    - passwordless_sudo_check.rc != 0
+    - passwordless_sudo_choice.user_input | default('n') | lower in ['yes', 'y']
+
+- name: Display passwordless sudo status
+  debug:
+    msg: "✓ Passwordless sudo enabled for {{ rootless_user_name }}"
+  when:
+    - passwordless_sudo_check.rc != 0
+    - passwordless_sudo_choice.user_input | default('n') | lower in ['yes', 'y']
+
+- name: Check if user lingering is enabled
+  stat:
+    path: "/var/lib/systemd/linger/{{ rootless_user_name }}"
+  register: linger_check
+  become: true
+
+- name: Enable user lingering
+  command: "loginctl enable-linger {{ rootless_user_name }}"
+  become: true
+  when: not linger_check.stat.exists
+
+- name: Display lingering status
+  debug:
+    msg: "✓ User lingering enabled for {{ rootless_user_name }}"
+  when: not linger_check.stat.exists
+
+- name: Check if privileged port binding is already configured
+  shell: "sysctl net.ipv4.ip_unprivileged_port_start | cut -d= -f2 | xargs"
+  register: current_port_start
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: Ask user about privileged port binding
+  pause:
+    prompt: |
+
+      Network Port Configuration
+      ─────────────────────────────────────────────────
+      Allow {{ rootless_user_name }} to bind to privileged ports (80, 443)?
+      This enables running web services on standard HTTP/HTTPS ports.
+
+      Enter 'y' for yes, 'n' for no [default: n]
+  register: privileged_ports_choice
+  when: current_port_start.stdout | default('1024') | int > 80
+
+- name: Allow binding to privileged ports
+  sysctl:
+    name: net.ipv4.ip_unprivileged_port_start
+    value: "80"
+    state: present
+    reload: yes
+  become: true
+  when:
+    - current_port_start.stdout | default('1024') | int > 80
+    - privileged_ports_choice.user_input | default('n') | lower in ['yes', 'y']
+
+- name: Create capability helper script
+  copy:
+    content: |
+      #!/bin/bash
+      # Helper script to grant CAP_NET_BIND_SERVICE to programs
+      if [ "$#" -ne 1 ]; then
+          echo "Usage: $0 <binary_path>"
+          exit 1
+      fi
+
+      BINARY="$1"
+      if [ -f "$BINARY" ]; then
+          setcap 'cap_net_bind_service=+ep' "$BINARY"
+          echo "Granted CAP_NET_BIND_SERVICE to $BINARY"
+      else
+          echo "Binary $BINARY not found"
+          exit 1
+      fi
+    dest: "/usr/local/bin/grant-port-binding"
+    mode: "0755"
+  become: true
+  when:
+    - current_port_start.stdout | default('1024') | int > 80
+    - privileged_ports_choice.user_input | default('n') | lower in ['yes', 'y']
+
+- name: Grant CAP_NET_BIND_SERVICE to common binaries
+  command: "setcap 'cap_net_bind_service=+ep' {{ item }}"
+  loop:
+    - /usr/bin/docker
+    - /usr/bin/dockerd
+  failed_when: false
+  become: true
+  when:
+    - current_port_start.stdout | default('1024') | int > 80
+    - privileged_ports_choice.user_input | default('n') | lower in ['yes', 'y']
+
+- name: Display privileged ports status
+  debug:
+    msg: |
+      ✓ Privileged port binding configured for {{ rootless_user_name }}
+        • Unprivileged port range starts at 80
+        • Docker binaries granted network capabilities
+        • Helper script: /usr/local/bin/grant-port-binding
+  when:
+    - current_port_start.stdout | default('1024') | int > 80
+    - privileged_ports_choice.user_input | default('n') | lower in ['yes', 'y']
+
+- name: Display privileged ports already configured
+  debug:
+    msg: "✓ Privileged port binding already configured (starts at {{ current_port_start.stdout }})"
+  when: current_port_start.stdout | default('1024') | int <= 80
+
+- name: Summary of user configuration
+  debug:
+    msg: |
+
+      User Configuration Complete: {{ rootless_user_name }}
+      ═══════════════════════════════════════════════════════
+      ✓ Sudo access granted
+      {{ '✓ Passwordless sudo enabled' if (passwordless_sudo_check.rc != 0 and passwordless_sudo_choice.user_input | default('n') | lower in ['yes', 'y']) or passwordless_sudo_check.rc == 0 else '• Passwordless sudo: disabled' }}
+      ✓ User lingering enabled (services persist after logout)
+      {{ '✓ Privileged port binding enabled (ports 80, 443)' if current_port_start.stdout | default('1024') | int <= 80 else '• Privileged ports: disabled' }}

@@ -1,0 +1,87 @@
+---
+- name: Check Docker service status
+  systemd:
+    name: docker
+  register: docker_service_status
+
+- name: Check Docker socket status
+  systemd:
+    name: docker.socket
+  register: docker_socket_status
+
+- name: Set Docker services running flag
+  set_fact:
+    docker_services_running: "{{ docker_service_status.status.ActiveState == 'active' or docker_socket_status.status.ActiveState == 'active' }}"
+
+- name: Display current Docker service status
+  debug:
+    msg: |
+
+      Docker Services Status
+      ─────────────────────────────────────────────────
+      Docker Service: {{ docker_service_status.status.ActiveState | default('unknown') }}
+      Docker Socket: {{ docker_socket_status.status.ActiveState | default('unknown') }}
+  when: docker_services_running
+
+- name: Ask user about disabling root Docker services
+  pause:
+    prompt: |
+
+      Root Docker Services Detected
+      ─────────────────────────────────────────────────
+      Docker is currently running as a root service.
+      For rootless operation, these services should be stopped and disabled.
+
+      Would you like to stop and disable root Docker services?
+      Enter 'y' to disable root services, 'n' to keep them [default: y]
+  register: user_confirmation
+  when: docker_services_running
+
+- name: Stop and disable Docker services
+  block:
+    - name: Stop Docker service
+      systemd:
+        name: docker
+        state: stopped
+      when: docker_service_status.status.ActiveState == "active"
+
+    - name: Stop Docker socket
+      systemd:
+        name: docker.socket
+        state: stopped
+      when: docker_socket_status.status.ActiveState == "active"
+
+    - name: Disable Docker service
+      systemd:
+        name: docker
+        enabled: no
+      when: docker_service_status.status.ActiveState == "active"
+
+    - name: Disable Docker socket
+      systemd:
+        name: docker.socket
+        enabled: no
+      when: docker_socket_status.status.ActiveState == "active"
+
+    - name: Display success message
+      debug:
+        msg: |
+          ✓ Root Docker services have been stopped and disabled
+          ✓ System is now ready for rootless Docker operation
+  when:
+    - docker_services_running
+    - user_confirmation.user_input | default('y') | lower in ['yes', 'y', '']
+
+- name: Display services kept running
+  debug:
+    msg: |
+      ⚠️  Root Docker services remain active
+      Note: You may experience conflicts when running rootless Docker.
+  when:
+    - docker_services_running
+    - user_confirmation.user_input | default('y') | lower not in ['yes', 'y', '']
+
+- name: Display no services running
+  debug:
+    msg: "✓ No root Docker services detected - ready for rootless operation"
+  when: not docker_services_running

@@ -1,0 +1,31 @@
+---
+- name: Install Docker prerequisites
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+
+- name: Install Docker rootless prerequisites
+  apt:
+    name:
+      - uidmap
+      - dbus-user-session
+    state: present
+
+- name: Check if Docker is installed
+  command: docker --version
+  register: docker_check
+  failed_when: false
+  changed_when: false
+
+- name: Install Docker if not present
+  include_tasks: install.yml
+  when: docker_check.rc != 0
+
+- name: Handle existing Docker services
+  include_tasks: handle_services.yml
+  when: docker_check.rc == 0

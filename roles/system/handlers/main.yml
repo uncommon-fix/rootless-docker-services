@@ -1,0 +1,9 @@
+---
+- name: restart systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart networking
+  service:
+    name: networking
+    state: restarted

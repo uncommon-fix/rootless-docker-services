@@ -1,0 +1,83 @@
+---
+- name: Determine execution context
+  set_fact:
+    is_root: "{{ ansible_user_id == 'root' or ansible_effective_user_id == '0' }}"
+
+- name: Use current user for non-root execution
+  block:
+    - name: Set current user as rootless user
+      set_fact:
+        rootless_user: "{{ ansible_user_id }}"
+
+    - name: Display non-root mode
+      debug:
+        msg: "Running in non-root mode - using current user: {{ ansible_user_id }}"
+  when: not is_root
+
+- name: Load existing configuration (root mode)
+  include_tasks: load_from_config.yml
+  when: rootless_user is not defined and is_root
+
+- name: Interactive user selection (root mode)
+  include_tasks: select_or_create.yml
+  when: rootless_user is not defined and is_root
+
+- name: Validate user selection
+  fail:
+    msg: |
+      Critical Error: No rootless user determined
+
+      This should not happen. Please check your configuration and try again.
+      If the problem persists, run with -vvv for detailed debugging information.
+  when: rootless_user is not defined
+
+- name: Display selected user
+  debug:
+    msg: |
+
+      Rootless User Selected
+      ─────────────────────────────────────────────────
+      User: {{ rootless_user }}
+      Mode: {{ 'Root execution' if is_root else 'Non-root execution' }}
+
+- name: Gather user information
+  user:
+    name: "{{ rootless_user }}"
+    state: present
+  register: user_info
+  check_mode: yes
+
+- name: Set user facts
+  set_fact:
+    rootless_user_name: "{{ rootless_user }}"
+    rootless_user_home: "{{ user_info.home | default('/home/' + rootless_user) }}"
+    rootless_user_uid: "{{ user_info.uid }}"
+    rootless_user_gid: "{{ user_info.group }}"
+
+- name: Configure user permissions and settings
+  include_tasks: normalize_user.yml
+
+- name: Persist configuration
+  include_role:
+    name: config_secrets
+    tasks_from: store_fact.yml
+  vars:
+    fact_name: "rootless_user"
+    fact_section: "config"
+    fact_value:
+      user: "{{ rootless_user_name }}"
+      home: "{{ rootless_user_home }}"
+      uid: "{{ rootless_user_uid }}"
+      gid: "{{ rootless_user_gid }}"
+
+- name: Configuration summary
+  debug:
+    msg: |
+
+      Rootless User Configuration Complete
+      ─────────────────────────────────────────────────
+      ✓ User: {{ rootless_user_name }}
+      ✓ Home: {{ rootless_user_home }}
+      ✓ UID: {{ rootless_user_uid }}
+      ✓ GID: {{ rootless_user_gid }}
+      ✓ Configuration saved for future runs

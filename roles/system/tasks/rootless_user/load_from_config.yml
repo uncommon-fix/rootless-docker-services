@@ -1,0 +1,38 @@
+---
+- name: Check for existing rootless user fact
+  set_fact:
+    existing_rootless_user: "{{ ansible_local.rootless_user.config.user | default(omit) }}"
+  when:
+    - ansible_local is defined
+    - ansible_local.rootless_user is defined
+    - ansible_local.rootless_user.config is defined
+    - ansible_local.rootless_user.config.user is defined
+
+- name: Ask user about existing rootless user
+  pause:
+    prompt: |
+
+      Found Previous Configuration
+      ─────────────────────────────────────────────────
+      Previously configured rootless user: {{ existing_rootless_user }}
+
+      Would you like to use this user again?
+      Enter 'y' to continue with {{ existing_rootless_user }}, 'n' to select a different user [default: y]
+  register: use_existing_confirmation
+  when: existing_rootless_user is defined
+
+- name: Load existing rootless user data
+  set_fact:
+    rootless_user: "{{ existing_rootless_user }}"
+    rootless_user_name: "{{ ansible_local.rootless_user.config.user }}"
+    rootless_user_home: "{{ ansible_local.rootless_user.config.home }}"
+    rootless_user_uid: "{{ ansible_local.rootless_user.config.uid }}"
+    rootless_user_gid: "{{ ansible_local.rootless_user.config.gid }}"
+  when:
+    - existing_rootless_user is defined
+    - use_existing_confirmation.user_input | default('y') | lower in ['yes', 'y', '']
+
+- name: Display loaded rootless user
+  debug:
+    msg: "✓ Loaded existing configuration for user: {{ rootless_user_name }}"
+  when: rootless_user is defined

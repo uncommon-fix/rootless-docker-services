@@ -1,0 +1,36 @@
+---
+- name: System updates and packages
+  become: true
+  block:
+    - name: Install essential packages
+      apt:
+        name: "{{ essential_packages }}"
+        state: present
+      when: ansible_os_family == "Debian"
+
+
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      when: ansible_os_family == "Debian"
+
+- name: Docker installation and setup
+  become: true
+  block:
+    - name: Include Docker setup
+      include_tasks: docker/docker.yml
+      tags: docker
+
+- name: Rootless user setup
+  block:
+    - name: Include rootless user setup
+      include_tasks: rootless_user/rootless_user.yml
+      tags: rootless_user
