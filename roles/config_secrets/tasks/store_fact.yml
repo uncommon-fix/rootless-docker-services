@@ -1,0 +1,39 @@
+---
+# Task to store a fact
+# Usage: include_tasks with fact_name, fact_value, and optional fact_section
+
+- name: Validate required variables
+  assert:
+    that:
+      - fact_name is defined
+      - fact_value is defined
+    fail_msg: "fact_name and fact_value must be defined"
+
+- name: Set default section
+  set_fact:
+    fact_section: "{{ fact_section | default('general') }}"
+
+- name: Read existing facts file
+  slurp:
+    src: "{{ uncommonfix_facts_dir }}/{{ fact_name }}.fact"
+  register: existing_facts
+  failed_when: false
+
+- name: Parse existing facts
+  set_fact:
+    current_facts: "{{ (existing_facts.content | b64decode | from_yaml) if existing_facts.content is defined else {} }}"
+
+- name: Update facts data
+  set_fact:
+    updated_facts: "{{ current_facts | combine({fact_section: (current_facts[fact_section] | default({})) | combine(fact_value)}, recursive=true) }}"
+
+- name: Store fact file
+  copy:
+    content: "{{ updated_facts | to_nice_yaml }}"
+    dest: "{{ uncommonfix_facts_dir }}/{{ fact_name }}.fact"
+    mode: "{{ facts_file_mode }}"
+  become: false
+
+- name: Refresh ansible facts
+  setup:
+    filter: "ansible_local"

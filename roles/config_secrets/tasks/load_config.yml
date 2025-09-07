@@ -1,0 +1,44 @@
+---
+- name: Find all fact files
+  find:
+    paths: "{{ uncommonfix_facts_dir }}"
+    patterns: "*.fact"
+  register: fact_files
+  no_log: true
+
+- name: Load custom facts manually
+  include_vars:
+    file: "{{ item.path }}"
+    name: "temp_fact_{{ item.path | basename | regex_replace('\\.fact$', '') }}"
+  loop: "{{ fact_files.files }}"
+  when: fact_files.files | length > 0
+  no_log: true
+  loop_control:
+    label: "{{ item.path | basename }}" # Show only filename instead of full file details
+
+- name: Build ansible_local structure from custom facts
+  set_fact:
+    ansible_local: "{{ ansible_local | default({}) | combine({item.path | basename | regex_replace('\\.fact$', ''): vars['temp_fact_' + (item.path | basename | regex_replace('\\.fact$', ''))]}) }}"
+  loop: "{{ fact_files.files }}"
+  when: fact_files.files | length > 0
+  no_log: true
+  loop_control:
+    label: "{{ item.path | basename }}" # Show only filename instead of full file details
+
+- name: Find all secret files
+  find:
+    paths: "{{ uncommonfix_secrets_dir }}"
+    patterns: "*.yml"
+  register: secret_files
+  no_log: true
+
+- name: Load secrets (if vault password provided)
+  include_vars: "{{ item.path }}"
+  loop: "{{ secret_files.files }}"
+  when:
+    - secret_files.files | length > 0
+    - vault_password_file is defined or ansible_vault_password is defined
+  ignore_errors: true # In case files are encrypted and no password provided
+  no_log: true
+  loop_control:
+    label: "{{ item.path | basename }}" # Show only filename instead of full file details

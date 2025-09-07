@@ -1,0 +1,13 @@
+---
+# Default configuration
+uncommonfix_config_dir: "{{ ansible_env.HOME }}/.config/uncommonfix"
+uncommonfix_facts_dir: "{{ uncommonfix_config_dir }}/facts.d"
+uncommonfix_secrets_dir: "{{ uncommonfix_config_dir }}/secrets"
+
+# Default permissions
+config_dir_mode: "0700"
+facts_file_mode: "0600"
+secrets_file_mode: "0600"
+
+# Namespace for facts
+uncommonfix_namespace: "uncommonfix"

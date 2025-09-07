@@ -1,0 +1,6 @@
+---
+- name: Setup uncommonfix config directories
+  include_tasks: setup.yml
+
+- name: Load existing configuration
+  include_tasks: load_config.yml

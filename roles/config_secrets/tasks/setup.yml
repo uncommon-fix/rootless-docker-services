@@ -1,0 +1,21 @@
+---
+- name: Create uncommonfix config directory
+  file:
+    path: "{{ uncommonfix_config_dir }}"
+    state: directory
+    mode: "{{ config_dir_mode }}"
+  become: false
+
+- name: Create facts directory
+  file:
+    path: "{{ uncommonfix_facts_dir }}"
+    state: directory
+    mode: "{{ config_dir_mode }}"
+  become: false
+
+- name: Create secrets directory
+  file:
+    path: "{{ uncommonfix_secrets_dir }}"
+    state: directory
+    mode: "{{ config_dir_mode }}"
+  become: false
