@@ -7,7 +7,7 @@
 
 - name: Add Docker GPG key
   get_url:
-    url: https://download.docker.com/linux/debian/gpg
+    url: https://download.docker.com/linux/ubuntu/gpg
     dest: /etc/apt/keyrings/docker.asc
     mode: "0644"
 
@@ -21,9 +21,14 @@
   register: dist_codename
   changed_when: false
 
+- name: Detect OS family and set repository
+  set_fact:
+    docker_repo_url: "{{ 'https://download.docker.com/linux/ubuntu' if ansible_distribution == 'Ubuntu' else 'https://download.docker.com/linux/debian' }}"
+    docker_gpg_url: "{{ 'https://download.docker.com/linux/ubuntu/gpg' if ansible_distribution == 'Ubuntu' else 'https://download.docker.com/linux/debian/gpg' }}"
+
 - name: Add Docker repository
   apt_repository:
-    repo: "deb [arch={{ system_arch.stdout }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ dist_codename.stdout }} stable"
+    repo: "deb [arch={{ system_arch.stdout }} signed-by=/etc/apt/keyrings/docker.asc] {{ docker_repo_url }} {{ dist_codename.stdout }} stable"
     filename: docker
     state: present
 
