@@ -1,0 +1,99 @@
+---
+- name: Discover available services
+  include_tasks: discover_services.yml
+
+- name: Show service installation menu
+  debug:
+    msg: |
+
+      Available Services for Installation
+      ═══════════════════════════════════════════════════════
+      {% for service in available_services %}
+      {{ loop.index }}. {{ service.name }} ({{ service.description }})
+         Category: {{ service.category }}
+         Latest: {{ service.latest_version | default('N/A') }}
+         {% if service.dependencies.conflicts | default([]) | length > 0 %}
+         ⚠️  Conflicts: {{ service.dependencies.conflicts | join(', ') }}
+         {% endif %}
+
+      {% endfor %}
+
+- name: Get service selection
+  pause:
+    prompt: |
+      Select service to install [1-{{ available_services | length }}]
+  register: service_selection
+
+- name: Set selected service
+  set_fact:
+    selected_service: "{{ available_services[service_selection.user_input | int - 1] }}"
+    selected_service_name: "{{ available_services[service_selection.user_input | int - 1].service_name }}"
+
+- name: Check for service conflicts
+  fail:
+    msg: |
+      Cannot install {{ selected_service.name }}
+      Conflicts with already installed service: {{ conflict_service }}
+  vars:
+    installed_services: "{{ ansible_local.services | default({}) | list }}"
+    conflict_service: "{{ installed_services | intersect(selected_service.dependencies.conflicts | default([])) | first }}"
+  when:
+    - selected_service.dependencies.conflicts | default([]) | length > 0
+    - installed_services | intersect(selected_service.dependencies.conflicts | default([])) | length > 0
+
+- name: Check required dependencies
+  fail:
+    msg: |
+      Missing required dependency: {{ missing_dep }}
+      Please install {{ missing_dep }} first or ensure it's available.
+  vars:
+    missing_dep: "{{ selected_service.dependencies.required | default([]) | difference(ansible_local.services | default({}) | list) | first }}"
+  when:
+    - selected_service.dependencies.required | default([]) | length > 0
+    - selected_service.dependencies.required | default([]) | difference(ansible_local.services | default({}) | list) | length > 0
+
+- name: Select version to install
+  pause:
+    prompt: |
+
+      Available versions for {{ selected_service.name }}:
+      {% for version in selected_service.available_versions %}
+      {{ loop.index }}. {{ version }}{% if version == selected_service.default_version %} (default){% endif %}{% if version == selected_service.latest_version %} (latest){% endif %}
+
+      {% endfor %}
+      Select version [1-{{ selected_service.available_versions | length }}] or press Enter for default
+  register: version_selection
+
+- name: Set selected version
+  set_fact:
+    selected_version: "{{ selected_service.available_versions[version_selection.user_input | int - 1] if version_selection.user_input | trim != '' else selected_service.default_version }}"
+
+- name: Load service defaults
+  include_vars:
+    file: "{{ role_path }}/configs/{{ selected_service_name }}/defaults.yml"
+    name: service_defaults
+  when: (role_path + '/configs/' + selected_service_name + '/defaults.yml') is file
+
+- name: Load version-specific variables
+  include_vars:
+    file: "{{ role_path }}/configs/{{ selected_service_name }}/versions/{{ selected_version }}/vars.yml"
+    name: version_vars
+  when: (role_path + '/configs/' + selected_service_name + '/versions/' + selected_version + '/vars.yml') is file
+
+- name: Execute version-specific installation
+  include_tasks: "{{ role_path }}/configs/{{ selected_service_name }}/versions/{{ selected_version }}/install.yml"
+  when: (role_path + '/configs/' + selected_service_name + '/versions/' + selected_version + '/install.yml') is file
+
+- name: Store service installation facts
+  include_role:
+    name: config_secrets
+    tasks_from: store_fact.yml
+  vars:
+    fact_name: "services"
+    fact_section: "{{ selected_service_name }}"
+    fact_value:
+      name: "{{ selected_service.name }}"
+      version: "{{ selected_version }}"
+      status: "installed"
+      installed_date: "{{ ansible_date_time.iso8601 }}"
+      config: "{{ service_final_config | default({}) }}"
