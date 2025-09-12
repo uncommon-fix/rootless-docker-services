@@ -1,51 +1,21 @@
 ---
-- name: Create apt keyrings directory
-  file:
-    path: /etc/apt/keyrings
-    state: directory
+- name: Download Docker installation script
+  get_url:
+    url: https://get.docker.com/
+    dest: /tmp/get-docker.sh
     mode: "0755"
 
-- name: Add Docker GPG key
-  get_url:
-    url: https://download.docker.com/linux/ubuntu/gpg
-    dest: /etc/apt/keyrings/docker.asc
-    mode: "0644"
+- name: Install Docker using official script
+  shell: CHANNEL=stable sh /tmp/get-docker.sh
+  args:
+    creates: /usr/bin/docker
+  become: true
 
-- name: Get system architecture
-  command: dpkg --print-architecture
-  register: system_arch
-  changed_when: false
-
-- name: Get distribution codename
-  command: lsb_release -cs
-  register: dist_codename
-  changed_when: false
-
-- name: Detect OS family and set repository
-  set_fact:
-    docker_repo_url: "{{ 'https://download.docker.com/linux/ubuntu' if ansible_distribution == 'Ubuntu' else 'https://download.docker.com/linux/debian' }}"
-    docker_gpg_url: "{{ 'https://download.docker.com/linux/ubuntu/gpg' if ansible_distribution == 'Ubuntu' else 'https://download.docker.com/linux/debian/gpg' }}"
-
-- name: Add Docker repository
-  apt_repository:
-    repo: "deb [arch={{ system_arch.stdout }} signed-by=/etc/apt/keyrings/docker.asc] {{ docker_repo_url }} {{ dist_codename.stdout }} stable"
-    filename: docker
-    state: present
-
-- name: Update apt cache after adding Docker repo
-  apt:
-    update_cache: yes
-
-- name: Install Docker packages
-  apt:
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-buildx-plugin
-      - docker-compose-plugin
-    state: present
+- name: Clean up installation script
+  file:
+    path: /tmp/get-docker.sh
+    state: absent
 
 - name: Display Docker installation complete
   debug:
-    msg: "Docker has been successfully installed"
+    msg: "Docker has been successfully installed using official script"
