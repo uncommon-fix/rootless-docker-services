@@ -1,26 +1,37 @@
 ---
 - name: System updates and packages
-  become: true
   block:
-    - name: Install essential packages
-      apt:
-        name: "{{ essential_packages }}"
-        state: present
-      when: ansible_os_family == "Debian"
+  - name: Update package cache first
+    apt:
+      update_cache: yes
+      cache_valid_time: 3600
+    when: ansible_os_family == "Debian"
+    retries: 3
+    delay: 5
+    become: true
 
+  - name: Install essential packages
+    apt:
+      name: "{{ essential_packages }}"
+      state: present
+    when: ansible_os_family == "Debian"
+    retries: 3
+    delay: 5
+    become: true
 
-    - name: Update package cache
-      apt:
-        update_cache: yes
-        cache_valid_time: 3600
-      when: ansible_os_family == "Debian"
+  - name: Upgrade all packages
+    apt:
+      upgrade: safe
+      autoremove: yes
+      autoclean: yes
+      dpkg_options: 'force-confdef,force-confold'
+    when: ansible_os_family == "Debian" and (upgrade_system | default(false))
+    retries: 3
+    delay: 10
+    become: true
+    async: 1800  # 30 minutes timeout
+    poll: 30     # Check every 30 seconds
 
-    - name: Upgrade all packages
-      apt:
-        upgrade: dist
-        autoremove: yes
-        autoclean: yes
-      when: ansible_os_family == "Debian"
 
 - name: Docker installation and setup
   become: true
