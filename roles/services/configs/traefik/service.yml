@@ -1,11 +1,13 @@
-name: traefik
+name: "Traefik"
 description: "Modern reverse proxy and load balancer"
 category: "infrastructure"
-dependencies: []
-conflicts: []
 latest_version: "v3.3"
+default_version: "v3.3"
 available_versions:
   - "v3.3"
+dependencies:
+  required: []
+  conflicts: []
 ports_required:
   - 80
   - 443
