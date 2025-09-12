@@ -8,26 +8,64 @@
 
       Available Services for Installation
       ═══════════════════════════════════════════════════════
-      {% for service in available_services %}
-      {{ loop.index }}. {{ service.name }} ({{ service.description }})
-         Category: {{ service.category }}
-         Latest: {{ service.latest_version | default('N/A') }}
-         {% if service.dependencies.conflicts | default([]) | length > 0 %}
-         ⚠️  Conflicts: {{ service.dependencies.conflicts | join(', ') }}
-         {% endif %}
+      {% for category_name in services_by_category.keys() | sort %}
+      {{ loop.index }}. {{ category_name | title }}
+      {% for service in services_by_category[category_name] %}
+         {{ loop.index0 + 1 }}. {{ service.name }}
+            {{ service.description }}
+            Latest: {{ service.latest_version | default('N/A') }}
+            {% if service.dependencies.conflicts | default([]) | length > 0 %}
+            ⚠️  Conflicts: {{ service.dependencies.conflicts | join(', ') }}
+            {% endif %}
+      {% endfor %}
 
       {% endfor %}
 
 - name: Get service selection
   pause:
     prompt: |
-      Select service to install [1-{{ available_services | length }}]
+      Select service to install (format: category.service, e.g., 1.1)
   register: service_selection
+
+- name: Parse selection input
+  set_fact:
+    selection_parts: "{{ service_selection.user_input.strip().split('.') }}"
+
+- name: Validate selection format
+  fail:
+    msg: "Invalid selection format. Please use format like '1.1' (category.service)"
+  when: >
+    selection_parts | length != 2 or
+    not (selection_parts[0] | regex_match('^[0-9]+$')) or
+    not (selection_parts[1] | regex_match('^[0-9]+$'))
+
+- name: Set selected service from categorized list
+  set_fact:
+    category_index: "{{ selection_parts[0] | int }}"
+    service_index: "{{ selection_parts[1] | int }}"
+    selected_category: "{{ (services_by_category.keys() | sort)[selection_parts[0] | int - 1] }}"
+
+- name: Validate category selection
+  fail:
+    msg: "Invalid category selection. Valid range: 1-{{ services_by_category.keys() | length }}"
+  when: (category_index | int) < 1 or (category_index | int) > (services_by_category.keys() | length)
+
+- name: Validate service selection within category
+  fail:
+    msg: "Invalid service selection. Valid range for {{ selected_category }}: 1-{{ services_by_category[selected_category] | length }}"
+  when: (service_index | int) < 1 or (service_index | int) > (services_by_category[selected_category] | length)
 
 - name: Set selected service
   set_fact:
-    selected_service: "{{ available_services[service_selection.user_input | int - 1] }}"
-    selected_service_name: "{{ available_services[service_selection.user_input | int - 1].service_name }}"
+    selected_service: "{{ services_by_category[selected_category][service_index - 1] }}"
+    selected_service_name: "{{ services_by_category[selected_category][service_index - 1].service_name }}"
+
+- name: Display selected service
+  debug:
+    msg: |
+      Selected Service: {{ selected_service.name }}
+      Category: {{ selected_category }}
+      Description: {{ selected_service.description }}
 
 - name: Check for service conflicts
   fail:
@@ -59,14 +97,14 @@
       Available versions for {{ selected_service.name }}:
       {% for version in selected_service.available_versions %}
       {{ loop.index }}. {{ version }}{% if version == selected_service.default_version %} (default){% endif %}{% if version == selected_service.latest_version %} (latest){% endif %}
-
       {% endfor %}
+
       Select version [1-{{ selected_service.available_versions | length }}] or press Enter for default
   register: version_selection
 
 - name: Set selected version
   set_fact:
-    selected_version: "{{ selected_service.available_versions[version_selection.user_input | int - 1] if version_selection.user_input | trim != '' else selected_service.default_version }}"
+    selected_version: "{{ selected_service.available_versions[version_selection.user_input.strip() | int - 1] if version_selection.user_input.strip() != '' else selected_service.default_version }}"
 
 - name: Load service defaults
   include_vars:

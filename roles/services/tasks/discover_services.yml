@@ -19,7 +19,12 @@
     service_name: "{{ item.path | basename }}"
     service_info: "{{ vars['service_' + service_name] | combine({'service_name': service_name}) }}"
 
-- name: Display discovered services
+- name: Group services by category
+  set_fact:
+    services_by_category: "{{ services_by_category | default({}) | combine({item.category: (services_by_category[item.category] | default([])) + [item]}) }}"
+  loop: "{{ available_services }}"
+
+- name: Display discovered services summary
   debug:
-    msg: "Discovered {{ available_services | length }} services: {{ available_services | map(attribute='name') | join(', ') }}"
+    msg: "Discovered {{ available_services | length }} services across {{ services_by_category.keys() | length }} categories"
   when: available_services is defined
