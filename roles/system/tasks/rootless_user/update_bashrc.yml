@@ -1,0 +1,23 @@
+---
+- name: Add Docker rootless environment to bashrc
+  blockinfile:
+    path: "{{ rootless_user_home }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - Docker Rootless"
+    block: |
+      # Docker rootless configuration
+      export DOCKER_HOST="unix://$XDG_RUNTIME_DIR/docker.sock"
+      export DOCKER_CONTEXT=rootless
+
+      # Add Docker rootless bin to PATH if it exists
+      if [ -d "$HOME/bin" ]; then
+          export PATH="$HOME/bin:$PATH"
+      fi
+    create: yes
+    owner: "{{ rootless_user_name }}"
+    group: "{{ rootless_user_name }}"
+    mode: "0644"
+  become: true
+
+- name: Display bashrc update complete
+  debug:
+    msg: "Updated bashrc with Docker rootless environment variables for {{ rootless_user_name }}"

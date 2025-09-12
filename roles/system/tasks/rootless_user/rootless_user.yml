@@ -57,6 +57,9 @@
 - name: Configure user permissions and settings
   include_tasks: normalize_user.yml
 
+- name: Update user bashrc configuration
+  include_tasks: update_bashrc.yml
+
 - name: Persist configuration
   include_role:
     name: config_secrets
@@ -80,4 +83,5 @@
       ✓ Home: {{ rootless_user_home }}
       ✓ UID: {{ rootless_user_uid }}
       ✓ GID: {{ rootless_user_gid }}
+      ✓ Bashrc updated with Docker environment
       ✓ Configuration saved for future runs
