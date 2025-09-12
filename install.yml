@@ -1,0 +1,14 @@
+---
+- hosts: all
+  tasks:
+    - name: Initialize Configuration System
+      ansible.builtin.import_role:
+        name: config_secrets
+      become: false
+
+    - name: System Setup
+      ansible.builtin.import_role:
+        name: services
+        tasks_from: install_service.yml
+      become: false
+    
