@@ -1,0 +1,56 @@
+---
+- name: Create Traefik service directory
+  file:
+    path: "{{ ansible_env.HOME }}/services/{{ service_name }}"
+    state: directory
+    mode: "0755"
+
+- name: Create Traefik config directory
+  file:
+    path: "{{ ansible_env.HOME }}/services/{{ service_name }}/config"
+    state: directory
+    mode: "0755"
+
+- name: Create Traefik logs directory
+  file:
+    path: "{{ ansible_env.HOME }}/services/{{ service_name }}/logs"
+    state: directory
+    mode: "0755"
+
+- name: Generate Traefik docker-compose.yml
+  template:
+    src: "docker-compose.yml.j2"
+    dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/docker-compose.yml"
+    mode: "0644"
+
+- name: Generate Traefik environment file
+  template:
+    src: ".env.j2"
+    dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/.env"
+    mode: "0600"
+
+- name: Generate Traefik configuration
+  template:
+    src: "config/traefik.yml.j2"
+    dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/config/traefik.yml"
+    mode: "0644"
+
+- name: Generate Traefik dynamic configuration
+  template:
+    src: "config/dynamic.yml.j2"
+    dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/config/dynamic.yml"
+    mode: "0644"
+
+- name: Create Traefik network
+  docker_network:
+    name: "{{ service_config['traefik.docker_network'] }}"
+
+- name: Set service final configuration
+  set_fact:
+    service_config: >-
+      {{
+        service_config | combine({
+          'install_path': ansible_env.HOME + '/services/' + service_name,
+          'version': target_service_version
+        })
+      }}

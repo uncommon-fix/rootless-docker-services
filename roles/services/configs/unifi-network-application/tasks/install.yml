@@ -1,0 +1,63 @@
+---
+- name: Generate MongoDB passwords
+  set_fact:
+    mongo_root_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
+    mongo_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
+
+- name: Add generated passwords to service config
+  set_fact:
+    service_config: >-
+      {{
+        service_config | combine({
+          'mongo_root_password': mongo_root_password,
+          'mongo_password': mongo_password
+        })
+      }}
+
+- name: Create UniFi service directory
+  file:
+    path: "{{ ansible_env.HOME }}/services/{{ service_name }}"
+    state: directory
+    mode: "0755"
+
+- name: Generate UniFi docker-compose.yml
+  template:
+    src: "docker-compose.yml.j2"
+    dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/docker-compose.yml"
+    mode: "0644"
+
+- name: Generate UniFi environment file
+  template:
+    src: ".env.j2"
+    dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/.env"
+    mode: "0600"
+
+- name: Generate MongoDB init script
+  template:
+    src: "init-mongo.sh.j2"
+    dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/init-mongo.sh"
+    mode: "0755"
+
+- name: Store MongoDB credentials as secrets
+  include_role:
+    name: config_secrets
+    tasks_from: store_secret.yml
+  vars:
+    secret_name: "{{ service_name }}_mongodb"
+    secret_data:
+      root_password: "{{ mongo_root_password }}"
+      user_password: "{{ mongo_password }}"
+
+- name: Create backup network if not exists
+  docker_network:
+    name: backup
+
+- name: Set service final configuration
+  set_fact:
+    service_config: >-
+      {{
+        service_config | combine({
+          'install_path': ansible_env.HOME + '/services/' + service_name,
+          'version': target_service_version
+        })
+      }}

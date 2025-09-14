@@ -1,0 +1,80 @@
+---
+- name: Load existing service configurations
+  include_role:
+    name: config_secrets
+    tasks_from: load_config.yml
+
+- name: Show installed services for update
+  debug:
+    msg: |
+
+      Installed Services Available for Update
+      ═══════════════════════════════════════════════════════
+      {% for service_name, service_info in (ansible_local.services | default({})).items() %}
+      {{ loop.index }}. {{ service_info.name }} (current: {{ service_info.version }})
+      {% endfor %}
+
+- name: Get service to update
+  pause:
+    prompt: |
+      Select service to update [1-{{ ansible_local.services | length }}]
+  register: update_selection
+  when: ansible_local.services | length > 0
+
+- name: Set service to update
+  set_fact:
+    service_to_update: "{{ (ansible_local.services | list)[update_selection.user_input | int - 1] }}"
+    current_service_info: "{{ ansible_local.services[service_to_update] }}"
+
+- name: Load service metadata
+  include_vars:
+    file: "{{ role_path }}/{{ service_to_update }}/service.yml"
+    name: service_metadata
+
+- name: Show available versions for update
+  debug:
+    msg: |
+
+      Available versions for {{ service_metadata.name }}:
+      Current: {{ current_service_info.version }}
+
+      {% for version in service_metadata.available_versions %}
+      {% if version != current_service_info.version %}
+      {{ loop.index }}. {{ version }}{% if version == service_metadata.latest_version %} (latest){% endif %}
+
+      {% endif %}
+      {% endfor %}
+
+- name: Get target version
+  pause:
+    prompt: |
+      Select target version for update
+  register: target_version_selection
+
+- name: Set target version
+  set_fact:
+    target_version: "{{ available_update_versions[target_version_selection.user_input | int - 1] }}"
+  vars:
+    available_update_versions: "{{ service_metadata.available_versions | difference([current_service_info.version]) }}"
+
+- name: Check if migration file exists
+  stat:
+    path: "{{ role_path }}/{{ service_to_update }}/versions/{{ target_version }}/migrate_from_{{ current_service_info.version }}.yml"
+  register: migration_file
+
+- name: Execute migration if available
+  include_tasks: "{{ role_path }}/{{ service_to_update }}/versions/{{ target_version }}/migrate_from_{{ current_service_info.version }}.yml"
+  when: migration_file.stat.exists
+
+- name: Execute fresh installation if no migration available
+  include_tasks: "{{ role_path }}/{{ service_to_update }}/versions/{{ target_version }}/install.yml"
+  when: not migration_file.stat.exists
+
+- name: Update service facts
+  include_role:
+    name: config_secrets
+    tasks_from: store_fact.yml
+  vars:
+    fact_name: "services"
+    fact_section: "{{ service_to_update }}"
+    fact_value: "{{ current_service_info | combine({'version': target_version, 'last_updated': ansible_date_time.iso8601}) }}"

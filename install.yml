@@ -1,12 +1,17 @@
 ---
 - hosts: all
+  vars_prompt:
+    - name: service_name
+      prompt: "Enter service name to install (e.g., traefik, unifi-network-application)"
+      private: false
+      
   tasks:
     - name: Initialize Configuration System
       ansible.builtin.import_role:
         name: config_secrets
       become: false
 
-    - name: System Setup
+    - name: Install Service
       ansible.builtin.import_role:
         name: services
         tasks_from: install_service.yml

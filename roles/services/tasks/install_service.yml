@@ -1,83 +1,76 @@
 ---
-- name: Discover available services
-  include_tasks: discover_services.yml
+- name: Validate service name is provided
+  fail:
+    msg: "Service name must be provided via service_name variable"
+  when: service_name is not defined or service_name == ""
 
-- name: Show service installation menu
+- name: Check if service configuration exists
+  stat:
+    path: "{{ role_path }}/configs/{{ service_name }}/service.yml"
+  register: service_config_check
+
+- name: List available services if requested service not found
+  find:
+    paths: "{{ role_path }}/configs"
+    file_type: directory
+  register: available_services
+  when: not service_config_check.stat.exists
+
+- name: Fail if service not found
+  fail:
+    msg: |
+      Service '{{ service_name }}' not found.
+
+      Available services:
+      {% for service in available_services.files | map(attribute='path') | map('basename') | sort %}
+      - {{ service }}
+      {% endfor %}
+  when: not service_config_check.stat.exists
+
+- name: Load service metadata
+  include_vars:
+    file: "{{ role_path }}/configs/{{ service_name }}/service.yml"
+    name: service_metadata
+
+- name: Check if service config template exists
+  stat:
+    path: "{{ role_path }}/configs/{{ service_name }}/config.json"
+  register: service_config_template_check
+
+- name: Load service config template
+  set_fact:
+    config_template: "{{ lookup('file', role_path + '/configs/' + service_name + '/config.json') | from_json }}"
+  when: service_config_template_check.stat.exists
+
+- name: Set service version to default if not provided
+  set_fact:
+    target_service_version: "{{ service_version | default(service_metadata.default_version) }}"
+
+- name: Validate selected version is available
+  fail:
+    msg: |
+      Version '{{ target_service_version }}' is not available for {{ service_metadata.name }}.
+      Available versions: {{ service_metadata.available_versions | join(', ') }}
+  when: target_service_version not in service_metadata.available_versions
+
+- name: Display service information
   debug:
     msg: |
-
-      Available Services for Installation
-      ═══════════════════════════════════════════════════════
-      {% for category_name in services_by_category.keys() | sort %}
-      {{ loop.index }}. {{ category_name | title }}
-      {% for service in services_by_category[category_name] %}
-         {{ loop.index0 + 1 }}. {{ service.name }}
-            {{ service.description }}
-            Latest: {{ service.latest_version | default('N/A') }}
-            {% if service.dependencies.conflicts | default([]) | length > 0 %}
-            ⚠️  Conflicts: {{ service.dependencies.conflicts | join(', ') }}
-            {% endif %}
-      {% endfor %}
-
-      {% endfor %}
-
-- name: Get service selection
-  pause:
-    prompt: |
-      Select service to install (format: category.service, e.g., 1.1)
-  register: service_selection
-
-- name: Parse selection input
-  set_fact:
-    selection_parts: "{{ service_selection.user_input.strip().split('.') }}"
-
-- name: Validate selection format
-  fail:
-    msg: "Invalid selection format. Please use format like '1.1' (category.service)"
-  when: >
-    selection_parts | length != 2 or
-    not (selection_parts[0] | regex_match('^[0-9]+$')) or
-    not (selection_parts[1] | regex_match('^[0-9]+$'))
-
-- name: Set selected service from categorized list
-  set_fact:
-    category_index: "{{ selection_parts[0] | int }}"
-    service_index: "{{ selection_parts[1] | int }}"
-    selected_category: "{{ (services_by_category.keys() | sort)[selection_parts[0] | int - 1] }}"
-
-- name: Validate category selection
-  fail:
-    msg: "Invalid category selection. Valid range: 1-{{ services_by_category.keys() | length }}"
-  when: (category_index | int) < 1 or (category_index | int) > (services_by_category.keys() | length)
-
-- name: Validate service selection within category
-  fail:
-    msg: "Invalid service selection. Valid range for {{ selected_category }}: 1-{{ services_by_category[selected_category] | length }}"
-  when: (service_index | int) < 1 or (service_index | int) > (services_by_category[selected_category] | length)
-
-- name: Set selected service
-  set_fact:
-    selected_service: "{{ services_by_category[selected_category][service_index - 1] }}"
-    selected_service_name: "{{ services_by_category[selected_category][service_index - 1].service_name }}"
-
-- name: Display selected service
-  debug:
-    msg: |
-      Selected Service: {{ selected_service.name }}
-      Category: {{ selected_category }}
-      Description: {{ selected_service.description }}
+      Installing Service: {{ service_metadata.name }}
+      Version: {{ target_service_version }}
+      Description: {{ service_metadata.description }}
 
 - name: Check for service conflicts
   fail:
     msg: |
-      Cannot install {{ selected_service.name }}
+      Cannot install {{ service_metadata.name }}
       Conflicts with already installed service: {{ conflict_service }}
   vars:
     installed_services: "{{ ansible_local.services | default({}) | list }}"
-    conflict_service: "{{ installed_services | intersect(selected_service.dependencies.conflicts | default([])) | first }}"
+    conflict_service: "{{ installed_services | intersect(service_metadata.dependencies.conflicts | default([])) | first }}"
   when:
-    - selected_service.dependencies.conflicts | default([]) | length > 0
-    - installed_services | intersect(selected_service.dependencies.conflicts | default([])) | length > 0
+    - service_metadata.dependencies.conflicts | default([]) | length > 0
+    - installed_services | intersect(service_metadata.dependencies.conflicts | default([])) | length > 0
 
 - name: Check required dependencies
   fail:
@@ -85,42 +78,23 @@
       Missing required dependency: {{ missing_dep }}
       Please install {{ missing_dep }} first or ensure it's available.
   vars:
-    missing_dep: "{{ selected_service.dependencies.required | default([]) | difference(ansible_local.services | default({}) | list) | first }}"
+    missing_dep: "{{ service_metadata.dependencies.required | default([]) | difference(ansible_local.services | default({}) | list) | first }}"
   when:
-    - selected_service.dependencies.required | default([]) | length > 0
-    - selected_service.dependencies.required | default([]) | difference(ansible_local.services | default({}) | list) | length > 0
+    - service_metadata.dependencies.required | default([]) | length > 0
+    - service_metadata.dependencies.required | default([]) | difference(ansible_local.services | default({}) | list) | length > 0
 
-- name: Select version to install
-  pause:
-    prompt: |
+- name: Collect interactive configuration
+  include_tasks: collect_config.yml
+  when: config_template is defined
 
-      Available versions for {{ selected_service.name }}:
-      {% for version in selected_service.available_versions %}
-      {{ loop.index }}. {{ version }}{% if version == selected_service.default_version %} (default){% endif %}{% if version == selected_service.latest_version %} (latest){% endif %}
-      {% endfor %}
+- name: Check if service install tasks exist
+  stat:
+    path: "{{ role_path }}/configs/{{ service_name }}/tasks/install.yml"
+  register: install_tasks_check
 
-      Select version [1-{{ selected_service.available_versions | length }}] or press Enter for default
-  register: version_selection
-
-- name: Set selected version
-  set_fact:
-    selected_version: "{{ selected_service.available_versions[version_selection.user_input.strip() | int - 1] if version_selection.user_input.strip() != '' else selected_service.default_version }}"
-
-- name: Load service defaults
-  include_vars:
-    file: "{{ role_path }}/configs/{{ selected_service_name }}/defaults.yml"
-    name: service_defaults
-  when: (role_path + '/configs/' + selected_service_name + '/defaults.yml') is file
-
-- name: Load version-specific variables
-  include_vars:
-    file: "{{ role_path }}/configs/{{ selected_service_name }}/versions/{{ selected_version }}/vars.yml"
-    name: version_vars
-  when: (role_path + '/configs/' + selected_service_name + '/versions/' + selected_version + '/vars.yml') is file
-
-- name: Execute version-specific installation
-  include_tasks: "{{ role_path }}/configs/{{ selected_service_name }}/versions/{{ selected_version }}/install.yml"
-  when: (role_path + '/configs/' + selected_service_name + '/versions/' + selected_version + '/install.yml') is file
+- name: Execute service installation
+  include_tasks: "{{ role_path }}/configs/{{ service_name }}/tasks/install.yml"
+  when: install_tasks_check.stat.exists
 
 - name: Store service installation facts
   include_role:
@@ -128,10 +102,15 @@
     tasks_from: store_fact.yml
   vars:
     fact_name: "services"
-    fact_section: "{{ selected_service_name }}"
+    fact_section: "{{ service_name }}"
     fact_value:
-      name: "{{ selected_service.name }}"
-      version: "{{ selected_version }}"
+      name: "{{ service_metadata.name }}"
+      version: "{{ target_service_version }}"
       status: "installed"
       installed_date: "{{ ansible_date_time.iso8601 }}"
-      config: "{{ service_final_config | default({}) }}"
+      config: "{{ service_config | default({}) }}"
+
+- name: Display installation complete
+  debug:
+    msg: |
+      ✓ Successfully installed {{ service_metadata.name }} v{{ target_service_version }}

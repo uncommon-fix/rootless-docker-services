@@ -1,0 +1,47 @@
+---
+- name: Validate service name is provided
+  fail:
+    msg: "Service name must be provided via service_name variable"
+  when: service_name is not defined or service_name == ""
+
+- name: Check if service configuration exists
+  stat:
+    path: "{{ role_path }}/configs/{{ service_name }}/service.yml"
+  register: service_config_check
+
+- name: Fail if service not found
+  fail:
+    msg: "Service '{{ service_name }}' not found."
+  when: not service_config_check.stat.exists
+
+- name: Load service metadata
+  include_vars:
+    file: "{{ role_path }}/configs/{{ service_name }}/service.yml"
+    name: service_metadata
+
+- name: Check if service configure tasks exist
+  stat:
+    path: "{{ role_path }}/configs/{{ service_name }}/tasks/configure.yml"
+  register: configure_tasks_check
+
+- name: Execute service configuration
+  include_tasks: "{{ role_path }}/configs/{{ service_name }}/tasks/configure.yml"
+  when: configure_tasks_check.stat.exists
+
+- name: Store service configuration facts
+  include_role:
+    name: config_secrets
+    tasks_from: store_fact.yml
+  vars:
+    fact_name: "services"
+    fact_section: "{{ service_name }}"
+    fact_value:
+      name: "{{ service_metadata.name }}"
+      status: "configured"
+      configured_date: "{{ ansible_date_time.iso8601 }}"
+      config: "{{ service_config | default({}) }}"
+
+- name: Display configuration complete
+  debug:
+    msg: |
+      ✓ Successfully configured {{ service_metadata.name }}

@@ -1,0 +1,16 @@
+{
+  "cloudflare_dns_api_token": "password",
+  "traefik": {
+    "version": "fixed|v3.3",
+    "domain": "string",
+    "dashboard_hostname": "string",
+    "email": "email",
+    "collect_anonymous_stats": "boolean|true",
+    "cert_resolver": "fixed|letsencrypt-dns-cloudflare",
+    "docker_network": "string|traefik",
+    "enable_ipv6": "boolean|false",
+    "ipv4": "ip|0.0.0.0",
+    "ipv6": "ip|::",
+    "log_level": "string|INFO"
+  }
+}

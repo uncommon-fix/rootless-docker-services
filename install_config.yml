@@ -1,0 +1,46 @@
+---
+- hosts: all
+  vars_prompt:
+    - name: service_name
+      prompt: "Enter service name to configure (e.g., traefik, unifi-network-application)"
+      private: false
+
+    # Traefik specific prompts
+    - name: traefik_domain
+      prompt: "Enter your domain for Traefik (e.g., example.com)"
+      private: false
+      when: service_name == "traefik"
+
+    - name: traefik_dashboard
+      prompt: "Enter dashboard hostname (e.g., traefik.{{ traefik_domain | default('example.com') }}) or leave empty to disable"
+      private: false
+      default: ""
+      when: service_name == "traefik"
+
+    - name: traefik_email
+      prompt: "Enter email for Let's Encrypt certificates"
+      private: false
+      when: service_name == "traefik"
+
+    - name: cloudflare_dns_api_token
+      prompt: "Enter Cloudflare DNS API token"
+      private: true
+      when: service_name == "traefik"
+
+    # UniFi specific prompts
+    - name: unifi_domain
+      prompt: "Enter your domain for UniFi (e.g., example.com)"
+      private: false
+      when: service_name == "unifi-network-application"
+
+  tasks:
+    - name: Initialize Configuration System
+      ansible.builtin.import_role:
+        name: config_secrets
+      become: false
+
+    - name: Configure Service
+      ansible.builtin.import_role:
+        name: services
+        tasks_from: configure_service.yml
+      become: false

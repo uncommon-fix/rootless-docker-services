@@ -1,0 +1,18 @@
+name: "UniFi Network Application"
+description: "Unified network management"
+category: "infrastructure"
+latest_version: "9.3.45"
+default_version: "9.3.45"
+available_versions:
+  - "9.3.45"
+dependencies:
+  required: []
+  conflicts: []
+ports_required:
+  - 8443
+  - 3478
+  - 10001
+  - 8080
+  - 1900
+  - 6789
+  - 5514
