@@ -8,7 +8,6 @@
   vars:
     field_path: "{{ item.key }}"
     field_config: "{{ item.value }}"
-    parent_path: ""
   loop: "{{ config_template | dict2items }}"
 
 - name: Display configuration summary

@@ -19,31 +19,31 @@
 
 - name: Generate Traefik docker-compose.yml
   template:
-    src: "docker-compose.yml.j2"
+    src: "{{ role_path }}/configs/{{ service_name }}/templates/docker-compose.yml.j2"
     dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/docker-compose.yml"
     mode: "0644"
 
 - name: Generate Traefik environment file
   template:
-    src: ".env.j2"
+    src: "{{ role_path }}/configs/{{ service_name }}/templates/.env.j2"
     dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/.env"
     mode: "0600"
 
 - name: Generate Traefik configuration
   template:
-    src: "config/traefik.yml.j2"
+    src: "{{ role_path }}/configs/{{ service_name }}/templates/config/traefik.yml.j2"
     dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/config/traefik.yml"
     mode: "0644"
 
 - name: Generate Traefik dynamic configuration
   template:
-    src: "config/dynamic.yml.j2"
+    src: "{{ role_path }}/configs/{{ service_name }}/templates/config/dynamic.yml.j2"
     dest: "{{ ansible_env.HOME }}/services/{{ service_name }}/config/dynamic.yml"
     mode: "0644"
 
 - name: Create Traefik network
   docker_network:
-    name: "{{ service_config['traefik.docker_network'] }}"
+    name: "{{ service_config['traefik_docker_network'] }}"
 
 - name: Set service final configuration
   set_fact:

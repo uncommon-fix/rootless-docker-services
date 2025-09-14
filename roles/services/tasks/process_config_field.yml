@@ -1,53 +1,37 @@
 ---
-- name: Set current path
+- name: Set current field name
   set_fact:
-    current_path: "{{ parent_path + ('.' if parent_path else '') + field_path }}"
-    current_var_name: "{{ (parent_path + ('_' if parent_path else '') + field_path).replace('.', '_') }}"
+    current_field_name: "{{ field_path }}"
 
-- name: Process object field
-  block:
-    - name: Process nested fields
-      include_tasks: process_config_field.yml
-      vars:
-        field_path: "{{ nested_item.key }}"
-        field_config: "{{ nested_item.value }}"
-        parent_path: "{{ current_path }}"
-      loop: "{{ field_config | dict2items }}"
-      loop_control:
-        loop_var: nested_item
-  when: field_config is mapping
+- name: Parse field definition
+  set_fact:
+    field_type: "{{ field_config.split('|')[0] if '|' in field_config else field_config }}"
+    field_default: "{{ field_config.split('|')[1:] | join('|') if '|' in field_config else '' }}"
 
-- name: Process simple field
-  block:
-    - name: Parse field definition
-      set_fact:
-        field_type: "{{ field_config.split('|')[0] if '|' in field_config else field_config }}"
-        field_default: "{{ field_config.split('|')[1:] | join('|') if '|' in field_config else '' }}"
+- name: Get existing variable value
+  set_fact:
+    existing_value: "{{ lookup('vars', current_field_name, default='') }}"
 
-    - name: Get existing variable value
-      set_fact:
-        existing_value: "{{ lookup('vars', current_var_name, default='') }}"
+- name: Handle fixed type
+  set_fact:
+    field_value: "{{ field_default }}"
+  when: field_type == "fixed"
 
-    - name: Handle fixed type
-      set_fact:
-        field_value: "{{ field_default }}"
-      when: field_type == "fixed"
+- name: Handle non-fixed types with existing values
+  set_fact:
+    field_value: "{{ existing_value }}"
+  when: field_type != "fixed" and existing_value != ""
 
-    - name: Handle non-fixed types with existing values
-      set_fact:
-        field_value: "{{ existing_value }}"
-      when: field_type != "fixed" and existing_value != ""
+- name: Handle non-fixed types with default values and no existing value
+  set_fact:
+    field_value: "{{ field_default }}"
+  when: field_type != "fixed" and existing_value == "" and field_default != ""
 
-    - name: Handle non-fixed types with default values and no existing value
-      set_fact:
-        field_value: "{{ field_default }}"
-      when: field_type != "fixed" and existing_value == "" and field_default != ""
+- name: Prompt for value when needed
+  include_tasks: prompt_for_value.yml
+  when: field_type != "fixed" and existing_value == "" and field_default == ""
 
-    - name: Prompt for value when needed
-      include_tasks: prompt_for_value.yml
-      when: field_type != "fixed" and (existing_value == "" and field_default == "")
-
-    - name: Set configuration value in flat structure
-      set_fact:
-        service_config: "{{ service_config | combine({current_path: field_value}) }}"
-  when: field_config is string
+- name: Set configuration value
+  set_fact:
+    service_config: "{{ service_config | combine({current_field_name: field_value}) }}"
+  when: field_value is defined

@@ -3,7 +3,7 @@ services:
     # version: https://doc.traefik.io/traefik/deprecation/releases
     # docker tags: https://hub.docker.com/_/traefik/tags
     # cloudflare vars: https://go-acme.github.io/lego/dns/cloudflare/
-    image: traefik:{{ traefik.version | default('v3.3') }}
+    image: traefik:{{ service_config.traefik_version | default('v3.3') }}
     container_name: traefik
     restart: always
     environment:
@@ -17,28 +17,28 @@ services:
       - ./config/dynamic.yml:/etc/traefik/dynamic.yml
       - ./logs:/var/log/traefik
       - letsencrypt:/letsencrypt
-    {% if traefik.dashboard is defined and traefik.dashboard %}
+    {% if service_config.traefik_dashboard_hostname is defined and service_config.traefik_dashboard_hostname %}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik-dashboard.rule=Host(`{{ traefik.dashboard }}`)"
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`{{ service_config.traefik_dashboard_hostname }}`)"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
       - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
       - "traefik.http.routers.traefik-dashboard.tls=true"
-      - "traefik.http.routers.traefik-dashboard.tls.certresolver={{ traefik.cert_resolver | default('letsencrypt-dns-cloudflare') }}:"
-      - "traefik.http.routers.traefik-health.rule=Host(`{{ traefik.dashboard }}`) && Path(`/ping`)"
+      - "traefik.http.routers.traefik-dashboard.tls.certresolver={{ service_config.traefik_cert_resolver | default('letsencrypt-dns-cloudflare') }}:"
+      - "traefik.http.routers.traefik-health.rule=Host(`{{ service_config.traefik_dashboard_hostname }}`) && Path(`/ping`)"
       - "traefik.http.routers.traefik-health.service=ping@internal"
       - "traefik.http.routers.traefik-health.entrypoints=websecure"
-      - "traefik.http.routers.traefik-health.tls.certresolver={{ traefik.cert_resolver | default('letsencrypt-dns-cloudflare') }}:"
+      - "traefik.http.routers.traefik-health.tls.certresolver={{ service_config.traefik_cert_resolver | default('letsencrypt-dns-cloudflare') }}:"
     {% endif %}
     networks:
       - traefik
       - internal
     ports:
-      - "{{ traefik.ipv4 }}:80:80"
-      - "{{ traefik.ipv4 }}:443:443"
-    {% if traefik.enable_ipv6 is defined and traefik.enable_ipv6 %}
-      - "{{ traefik.ipv6 }}:80:80"
-      - "{{ traefik.ipv6 }}:443:443"
+      - "{{ service_config.traefik_ipv4 }}:80:80"
+      - "{{ service_config.traefik_ipv4 }}:443:443"
+    {% if service_config.traefik_enable_ipv6 is defined and service_config.traefik_enable_ipv6 %}
+      - "{{ service_config.traefik_ipv6 }}:80:80"
+      - "{{ service_config.traefik_ipv6 }}:443:443"
     {% endif %}
     expose:
       - 8082

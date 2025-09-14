@@ -1,16 +1,16 @@
 ---
 - name: Generate prompt message
   set_fact:
-    prompt_message: "{{ prompt_messages[field_type] | default('Enter ' + current_path) }}"
+    prompt_message: "{{ prompt_messages[field_type] | default('Enter ' + current_field_name) }}"
   vars:
     prompt_messages:
-      string: "Enter {{ current_path }}"
-      password: "Enter {{ current_path }} (hidden input)"
-      boolean: "Enable {{ current_path }}? (true/false)"
-      ip: "Enter {{ current_path }} (IPv4 or IPv6 address)"
-      email: "Enter {{ current_path }} (email address)"
-      url: "Enter {{ current_path }} (URL)"
-      port: "Enter {{ current_path }} (port number 1-65535)"
+      string: "Enter {{ current_field_name }}"
+      password: "Enter {{ current_field_name }} (hidden input)"
+      boolean: "Enable {{ current_field_name }}? (true/false)"
+      ip: "Enter {{ current_field_name }} (IPv4 or IPv6 address)"
+      email: "Enter {{ current_field_name }} (email address)"
+      url: "Enter {{ current_field_name }} (URL)"
+      port: "Enter {{ current_field_name }} (port number 1-65535)"
 
 - name: Prompt for password field
   pause:
@@ -38,17 +38,20 @@
       url: "Please enter a valid URL (http:// or https://)"
       port: "Please enter a valid port number (1-65535)"
   when: >
-    (field_type == "string" and user_input.user_input == "") or
-    (field_type == "password" and user_input.user_input == "") or
-    (field_type == "boolean" and user_input.user_input not in ["true", "false", "yes", "no", "y", "n"]) or
-    (field_type == "email" and not (user_input.user_input | regex_search('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'))) or
-    (field_type == "port" and not (user_input.user_input | regex_search('^[0-9]+$') and user_input.user_input | int >= 1 and user_input.user_input | int <= 65535))
+    user_input is defined and (
+      (field_type == "string" and user_input.user_input == "") or
+      (field_type == "password" and user_input.user_input == "") or
+      (field_type == "boolean" and user_input.user_input not in ["true", "false", "yes", "no", "y", "n"]) or
+      (field_type == "email" and not (user_input.user_input | regex_search('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'))) or
+      (field_type == "port" and not (user_input.user_input | regex_search('^[0-9]+$') and user_input.user_input | int >= 1 and user_input.user_input | int <= 65535))
+    )
 
 - name: Normalize boolean values
   set_fact:
     normalized_input: "{{ 'true' if user_input.user_input.lower() in ['true', 'yes', 'y'] else 'false' }}"
-  when: field_type == "boolean"
+  when: field_type == "boolean" and user_input is defined
 
 - name: Set field value
   set_fact:
-    field_value: "{{ normalized_input if field_type == 'boolean' else user_input.user_input }}"
+    field_value: "{{ normalized_input if (field_type == 'boolean' and normalized_input is defined) else user_input.user_input }}"
+  when: user_input is defined

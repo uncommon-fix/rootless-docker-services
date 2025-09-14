@@ -1,13 +1,9 @@
 {
-    "unifi": {
-        "version": "fixed|9.3.45",
-        "domain": "string",
-        "timezone": "string|UTC",
-        "java_opts": "string|-Xmx1024M",
-        "enable_traefik_labels": "boolean|true"
-    },
-    "mongo": {
-        "version": "fixed|8.0.13",
-        "create_backups": "boolean|true"
-    }
+    "unifi_version": "fixed|9.3.45",
+    "unifi_domain": "string",
+    "unifi_timezone": "string|UTC",
+    "unifi_java_opts": "string|-Xmx1024M",
+    "unifi_enable_traefik_labels": "boolean|true",
+    "mongo_version": "fixed|8.0.13",
+    "mongo_create_backups": "boolean|true"
 }

@@ -1,5 +1,5 @@
 # =====================================================
-# Traefik configuration file {{ traefik.version | default('v3.3') }}
+# Traefik configuration file {{ service_config.traefik_version | default('v3.3') }}
 # Author: Uncommon Fix (https://www.youtube.com/@uncommonfix)
 # Last Modified: 2025-09-02
 # =====================================================
@@ -15,10 +15,10 @@
 
 global:
   checkNewVersion: false
-  sendAnonymousUsage: {{ traefik.collect_anonymous_stats | default(true) | lower }}
+  sendAnonymousUsage: {{ service_config.traefik_collect_anonymous_stats | default(true) | lower }}
 
 api:
-  dashboard: {{ true if traefik.dashboard is defined and traefik.dashboard else false }}
+  dashboard: {{ true if service_config.traefik_dashboard_hostname is defined and service_config.traefik_dashboard_hostname else false }}
   insecure: false
 
 entryPoints:
@@ -35,7 +35,7 @@ ping:
 providers:
   docker:
     endpoint: "tcp://socket-proxy:2375"
-    network: "{{ traefik.docker_network | default('traefik') }}"
+    network: "{{ service_config.traefik_docker_network | default('traefik') }}"
     exposedByDefault: false
     watch: true
   file:
@@ -43,9 +43,9 @@ providers:
     watch: true
 
 certificatesResolvers:
-  {{ traefik.cert_resolver | default('letsencrypt-dns-cloudflare') }}:
+  {{ service_config.traefik_cert_resolver | default('letsencrypt-dns-cloudflare') }}:
     acme:
-      email: "{{ traefik.email | default('webmaster@example.com') }}"
+      email: "{{ service_config.traefik_email | default('webmaster@example.com') }}"
       storage: "/letsencrypt/acme.json"
       dnsChallenge:
         provider: cloudflare
