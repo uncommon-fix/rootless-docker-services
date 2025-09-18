@@ -48,10 +48,10 @@
 
         New User Creation
         ─────────────────────────────────────────────────
-        enter the username
+        If you selected 'new' above, enter the username
+        (Leave blank if not creating a new user)
       private: false
       default: ""
-      when: rootless_user_selection == "new"
 
     - name: enable_system_reboot
       prompt: |

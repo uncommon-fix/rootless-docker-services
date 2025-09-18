@@ -9,11 +9,11 @@
           ─────────────────────────────────────────────────
           Enter username for the new user
       register: username_prompt
-      when: new_username is not defined
+      when: new_user_name is not defined or new_user_name == ""
 
-    - name: Set new username
+    - name: Set new username from provided value or prompt
       set_fact:
-        new_username: "{{ new_username if new_username is defined else username_prompt.user_input }}"
+        new_username: "{{ new_user_name if (new_user_name is defined and new_user_name != '') else username_prompt.user_input }}"
 
 - name: Check if new username already exists
   shell: "getent passwd {{ new_username }}"
@@ -29,27 +29,20 @@
   when: user_exists_check.rc == 0
 
 - name: Get password for new user
-  block:
-    - name: Use provided password or prompt
-      pause:
-        prompt: |
+  pause:
+    prompt: |
 
-          Set Password
-          ─────────────────────────────────────────────────
-          Enter password for new user '{{ new_username }}'
-          (input will be hidden)
-        echo: false
-      register: password_prompt
-      when: new_user_password is not defined or new_user_password == ""
-
-    - name: Set user password
-      set_fact:
-        user_password: "{{ new_user_password if (new_user_password is defined and new_user_password != '') else password_prompt.user_input }}"
+      Set Password
+      ─────────────────────────────────────────────────
+      Enter password for new user '{{ new_username }}'
+      (input will be hidden)
+    echo: false
+  register: password_prompt
 
 - name: Create new user
   user:
     name: "{{ new_username }}"
-    password: "{{ user_password | password_hash('sha512') }}"
+    password: "{{ password_prompt.user_input | password_hash('sha512') }}"
     groups: []
     shell: /bin/bash
     create_home: yes
