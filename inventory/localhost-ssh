@@ -1,0 +1,6 @@
+[localhost]
+127.0.0.1 ansible_connection=ssh ansible_user=vm
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+ansible_ssh_pipelining=true

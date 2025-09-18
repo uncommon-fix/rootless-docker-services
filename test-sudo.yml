@@ -1,24 +1,30 @@
 ---
 - hosts: all
   gather_facts: yes
-  become: false
+  become: true
 
   tasks:
-    - name: Test basic apt update with proper sudo
+    - name: Test simple command first
+      command: whoami
+      register: sudo_user
+
+    - name: Display sudo user
+      debug:
+        msg: "Running as: {{ sudo_user.stdout }}"
+
+    - name: Test basic apt update
       apt:
         update_cache: yes
         cache_valid_time: 3600
-      become: true
-      become_method: sudo
+      when: ansible_os_family == "Debian"
 
-    - name: Test package installation
+    - name: Test package installation  
       apt:
         name:
           - curl
           - wget
         state: present
-      become: true
-      become_method: sudo
+      when: ansible_os_family == "Debian"
 
     - name: Display success
       debug:

@@ -1,0 +1,27 @@
+---
+- hosts: all
+  gather_facts: yes
+  become: false
+
+  tasks:
+    - name: Test sudo with become
+      debug:
+        msg: "Testing sudo access..."
+
+    - name: Test basic apt update with proper sudo
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      become: true
+
+    - name: Test package installation
+      apt:
+        name:
+          - curl
+          - wget
+        state: present
+      become: true
+
+    - name: Display success
+      debug:
+        msg: "✅ Sudo operations successful"
