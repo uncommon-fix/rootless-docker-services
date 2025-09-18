@@ -10,6 +10,7 @@
         cache_valid_time: 3600
       when: ansible_os_family == "Debian"
       become: true
+      become_method: sudo
 
     - name: Install essential packages
       apt:
@@ -17,6 +18,7 @@
         state: present
       when: ansible_os_family == "Debian"
       become: true
+      become_method: sudo
 
     - name: Upgrade all packages (if requested)
       apt:
@@ -27,13 +29,15 @@
         - ansible_os_family == "Debian"
         - upgrade_system | default(false) | bool
       become: true
+      become_method: sudo
 
 - name: Docker installation and setup
-  become: true
   block:
     - name: Include Docker setup
       include_tasks: docker/docker.yml
       tags: docker
+  become: true
+  become_method: sudo
 
 - name: Rootless user setup
   block:
@@ -53,10 +57,12 @@
         - /etc/subuid
         - /etc/subgid
       become: true
+      become_method: sudo
 
     - name: Enable user lingering for rootless user
       command: "loginctl enable-linger {{ rootless_user_name }}"
       become: true
+      become_method: sudo
       changed_when: true
 
     - name: Create Docker config directory for rootless user
@@ -67,6 +73,7 @@
         owner: "{{ rootless_user_name }}"
         group: "{{ rootless_user_name }}"
       become: true
+      become_method: sudo
 
     - name: Configure Docker daemon for rootless user
       copy:
@@ -84,6 +91,7 @@
         owner: "{{ rootless_user_name }}"
         group: "{{ rootless_user_name }}"
       become: true
+      become_method: sudo
 
     - name: Display completion message
       debug:
@@ -111,6 +119,7 @@
         msg: "Rebooting for rootless Docker setup"
         reboot_timeout: 300
       become: true
+      become_method: sudo
       when: 
         - enable_system_reboot | default(false) | bool
         - ansible_connection != 'local'

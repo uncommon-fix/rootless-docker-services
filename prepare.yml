@@ -1,5 +1,6 @@
 ---
 - hosts: all
+  gather_facts: yes
   vars_prompt:
     - name: docker_disable_root_services
       prompt: |
@@ -66,6 +67,22 @@
       default: "n"
 
   pre_tasks:
+    # Check sudo access early
+    - name: Test sudo access
+      command: sudo -n true
+      register: sudo_test
+      failed_when: false
+      changed_when: false
+
+    - name: Verify sudo access or fail gracefully
+      fail:
+        msg: |
+          Sudo access is required for this playbook.
+          Please run with --ask-become-pass or configure passwordless sudo.
+      when: 
+        - sudo_test.rc != 0
+        - ansible_become_password is not defined
+
     # Normalize boolean variables from strings
     - name: Normalize configuration variables
       set_fact:
