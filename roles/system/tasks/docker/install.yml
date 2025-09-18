@@ -1,4 +1,17 @@
 ---
+- name: Install Docker prerequisites
+  apt:
+    name:
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - uidmap
+      - dbus-user-session
+    state: present
+    update_cache: yes
+  become: true
+
 - name: Download Docker installation script
   get_url:
     url: https://get.docker.com/

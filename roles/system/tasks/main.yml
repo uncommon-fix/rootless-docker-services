@@ -4,60 +4,29 @@
 
 - name: System updates and packages
   block:
-  - name: Check if apt is locked
-    shell: |
-      if fuser /var/lib/dpkg/lock >/dev/null 2>&1; then
-        echo "locked"
-      else
-        echo "unlocked"
-      fi
-    register: apt_lock_check
-    changed_when: false
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      become: true
 
-  - name: Wait for apt lock to be released
-    wait_for:
-      path: /var/lib/dpkg/lock
-      state: absent
-      timeout: 300
-    when: apt_lock_check.stdout == "locked"
+    - name: Install essential packages
+      apt:
+        name: "{{ essential_packages }}"
+        state: present
+      when: ansible_os_family == "Debian"
+      become: true
 
-  - name: Update package cache with better error handling
-    apt:
-      update_cache: yes
-      cache_valid_time: 3600
-      force_apt_get: yes
-    when: ansible_os_family == "Debian"
-    retries: 5
-    delay: 10
-    register: apt_update_result
-    until: apt_update_result is succeeded
-    become: true
-
-  - name: Install essential packages
-    apt:
-      name: "{{ essential_packages }}"
-      state: present
-      force_apt_get: yes
-    when: ansible_os_family == "Debian"
-    retries: 3
-    delay: 5
-    become: true
-
-  - name: Upgrade all packages (conditional)
-    apt:
-      upgrade: safe
-      autoremove: yes
-      autoclean: yes
-      dpkg_options: 'force-confdef,force-confold'
-      force_apt_get: yes
-    when: 
-      - ansible_os_family == "Debian" 
-      - upgrade_system | default(false) | bool
-    retries: 3
-    delay: 10
-    become: true
-    async: 1800  # 30 minutes timeout
-    poll: 30     # Check every 30 seconds
+    - name: Upgrade all packages (if requested)
+      apt:
+        upgrade: safe
+        autoremove: yes
+        autoclean: yes
+      when: 
+        - ansible_os_family == "Debian"
+        - upgrade_system | default(false) | bool
+      become: true
 
 - name: Docker installation and setup
   become: true
