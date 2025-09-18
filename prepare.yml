@@ -1,5 +1,59 @@
 ---
 - hosts: all
+  vars_prompt:
+    - name: docker_disable_root_services
+      prompt: |
+
+        Root Docker Services Configuration
+        ─────────────────────────────────────────────────
+        Docker may be running as a root service.
+        For rootless operation, these services should be stopped and disabled.
+
+        Would you like to stop and disable root Docker services? [Y/n]
+      private: false
+      default: "y"
+
+    - name: enable_passwordless_sudo
+      prompt: |
+
+        Sudo Configuration
+        ─────────────────────────────────────────────────
+        Would you like to enable passwordless sudo?
+        This allows running sudo commands without password prompts. [y/N]
+      private: false
+      default: "n"
+
+    - name: enable_privileged_ports
+      prompt: |
+
+        Network Port Configuration
+        ─────────────────────────────────────────────────
+        Allow binding to privileged ports (80, 443)?
+        This enables running web services on standard HTTP/HTTPS ports. [y/N]
+      private: false
+      default: "n"
+
+    - name: enable_system_reboot
+      prompt: |
+
+        System Reboot Configuration
+        ─────────────────────────────────────────────────
+        The system needs to be rebooted to complete the rootless Docker setup.
+        This ensures proper configuration takes effect.
+        
+        Would you like to reboot automatically? [y/N]
+      private: false
+      default: "n"
+
+  pre_tasks:
+    # Normalize boolean variables from strings
+    - name: Normalize configuration variables
+      set_fact:
+        docker_disable_root_services: "{{ (docker_disable_root_services | default('y') | lower) in ['y', 'yes', 'true'] }}"
+        enable_passwordless_sudo: "{{ (enable_passwordless_sudo | default('n') | lower) in ['y', 'yes', 'true'] }}"
+        enable_privileged_ports: "{{ (enable_privileged_ports | default('n') | lower) in ['y', 'yes', 'true'] }}"
+        enable_system_reboot: "{{ (enable_system_reboot | default('n') | lower) in ['y', 'yes', 'true'] }}"
+
   tasks:
     - name: Initialize Configuration System
       ansible.builtin.import_role:
@@ -10,4 +64,3 @@
       ansible.builtin.import_role:
         name: system
       become: false
-    

@@ -1,0 +1,65 @@
+---
+- name: Set username for new user
+  block:
+    - name: Use provided new_user_name or prompt
+      pause:
+        prompt: |
+
+          Create New User
+          ─────────────────────────────────────────────────
+          Enter username for the new user
+      register: username_prompt
+      when: new_username is not defined
+
+    - name: Set new username
+      set_fact:
+        new_username: "{{ new_username if new_username is defined else username_prompt.user_input }}"
+
+- name: Check if new username already exists
+  shell: "getent passwd {{ new_username }}"
+  register: user_exists_check
+  failed_when: false
+  changed_when: false
+
+- name: Fail if username already exists
+  fail:
+    msg: |
+      Error: User '{{ new_username }}' already exists
+      Please run the playbook again and choose a different username.
+  when: user_exists_check.rc == 0
+
+- name: Get password for new user
+  block:
+    - name: Use provided password or prompt
+      pause:
+        prompt: |
+
+          Set Password
+          ─────────────────────────────────────────────────
+          Enter password for new user '{{ new_username }}'
+          (input will be hidden)
+        echo: false
+      register: password_prompt
+      when: new_user_password is not defined or new_user_password == ""
+
+    - name: Set user password
+      set_fact:
+        user_password: "{{ new_user_password if (new_user_password is defined and new_user_password != '') else password_prompt.user_input }}"
+
+- name: Create new user
+  user:
+    name: "{{ new_username }}"
+    password: "{{ user_password | password_hash('sha512') }}"
+    groups: []
+    shell: /bin/bash
+    create_home: yes
+    state: present
+  become: true
+
+- name: Set rootless user to newly created user
+  set_fact:
+    rootless_user: "{{ new_username }}"
+
+- name: Display created user
+  debug:
+    msg: "✓ Successfully created new user: {{ new_username }}"

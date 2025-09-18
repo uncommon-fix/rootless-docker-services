@@ -23,20 +23,6 @@
       Docker Socket: {{ docker_socket_status.status.ActiveState | default('unknown') }}
   when: docker_services_running
 
-- name: Ask user about disabling root Docker services
-  pause:
-    prompt: |
-
-      Root Docker Services Detected
-      ─────────────────────────────────────────────────
-      Docker is currently running as a root service.
-      For rootless operation, these services should be stopped and disabled.
-
-      Would you like to stop and disable root Docker services?
-      Enter 'y' to disable root services, 'n' to keep them [default: y]
-  register: user_confirmation
-  when: docker_services_running
-
 - name: Stop and disable Docker services
   block:
     - name: Stop Docker service
@@ -70,7 +56,7 @@
           ✓ System is now ready for rootless Docker operation
   when:
     - docker_services_running
-    - user_confirmation.user_input | default('y') | lower in ['yes', 'y', '']
+    - docker_disable_root_services | default(true) | bool
 
 - name: Display services kept running
   debug:
@@ -79,7 +65,7 @@
       Note: You may experience conflicts when running rootless Docker.
   when:
     - docker_services_running
-    - user_confirmation.user_input | default('y') | lower not in ['yes', 'y', '']
+    - not (docker_disable_root_services | default(true) | bool)
 
 - name: Display no services running
   debug:

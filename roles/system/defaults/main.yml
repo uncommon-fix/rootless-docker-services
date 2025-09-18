@@ -12,3 +12,16 @@ essential_packages:
   - lsb-release
 
 system_users: []
+
+# System configuration defaults
+upgrade_system: false
+docker_disable_root_services: true
+enable_passwordless_sudo: false
+enable_privileged_ports: false
+enable_system_reboot: false
+
+# Rootless user configuration
+rootless_user_selection: ""  # Can be username, number, or 'new'
+new_user_name: ""
+new_user_password: ""
+use_existing_rootless_user: true

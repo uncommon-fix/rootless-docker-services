@@ -13,19 +13,6 @@
   changed_when: false
   become: true
 
-- name: Ask user about passwordless sudo
-  pause:
-    prompt: |
-
-      Sudo Configuration for '{{ rootless_user_name }}'
-      ─────────────────────────────────────────────────
-      Would you like to enable passwordless sudo?
-      This allows running sudo commands without password prompts.
-
-      Enter 'y' for yes, 'n' for no [default: n]
-  register: passwordless_sudo_choice
-  when: passwordless_sudo_check.rc != 0
-
 - name: Configure passwordless sudo
   lineinfile:
     path: /etc/sudoers.d/{{ rootless_user_name }}
@@ -36,14 +23,14 @@
   become: true
   when:
     - passwordless_sudo_check.rc != 0
-    - passwordless_sudo_choice.user_input | default('n') | lower in ['yes', 'y']
+    - enable_passwordless_sudo | default(false) | bool
 
 - name: Display passwordless sudo status
   debug:
     msg: "✓ Passwordless sudo enabled for {{ rootless_user_name }}"
   when:
     - passwordless_sudo_check.rc != 0
-    - passwordless_sudo_choice.user_input | default('n') | lower in ['yes', 'y']
+    - enable_passwordless_sudo | default(false) | bool
 
 - name: Check if user lingering is enabled
   stat:
@@ -68,19 +55,6 @@
   failed_when: false
   become: true
 
-- name: Ask user about privileged port binding
-  pause:
-    prompt: |
-
-      Network Port Configuration
-      ─────────────────────────────────────────────────
-      Allow {{ rootless_user_name }} to bind to privileged ports (80, 443)?
-      This enables running web services on standard HTTP/HTTPS ports.
-
-      Enter 'y' for yes, 'n' for no [default: n]
-  register: privileged_ports_choice
-  when: current_port_start.stdout | default('1024') | int > 80
-
 - name: Allow binding to privileged ports
   sysctl:
     name: net.ipv4.ip_unprivileged_port_start
@@ -90,7 +64,7 @@
   become: true
   when:
     - current_port_start.stdout | default('1024') | int > 80
-    - privileged_ports_choice.user_input | default('n') | lower in ['yes', 'y']
+    - enable_privileged_ports | default(false) | bool
 
 - name: Create capability helper script
   copy:
@@ -115,7 +89,7 @@
   become: true
   when:
     - current_port_start.stdout | default('1024') | int > 80
-    - privileged_ports_choice.user_input | default('n') | lower in ['yes', 'y']
+    - enable_privileged_ports | default(false) | bool
 
 - name: Grant CAP_NET_BIND_SERVICE to common binaries
   command: "setcap 'cap_net_bind_service=+ep' {{ item }}"
@@ -126,7 +100,7 @@
   become: true
   when:
     - current_port_start.stdout | default('1024') | int > 80
-    - privileged_ports_choice.user_input | default('n') | lower in ['yes', 'y']
+    - enable_privileged_ports | default(false) | bool
 
 - name: Display privileged ports status
   debug:
@@ -137,7 +111,7 @@
         • Helper script: /usr/local/bin/grant-port-binding
   when:
     - current_port_start.stdout | default('1024') | int > 80
-    - privileged_ports_choice.user_input | default('n') | lower in ['yes', 'y']
+    - enable_privileged_ports | default(false) | bool
 
 - name: Display privileged ports already configured
   debug:
@@ -151,6 +125,6 @@
       User Configuration Complete: {{ rootless_user_name }}
       ═══════════════════════════════════════════════════════
       ✓ Sudo access granted
-      {{ '✓ Passwordless sudo enabled' if (passwordless_sudo_check.rc != 0 and passwordless_sudo_choice.user_input | default('n') | lower in ['yes', 'y']) or passwordless_sudo_check.rc == 0 else '• Passwordless sudo: disabled' }}
+      {{ '✓ Passwordless sudo enabled' if enable_passwordless_sudo | default(false) else '• Passwordless sudo: disabled' }}
       ✓ User lingering enabled (services persist after logout)
-      {{ '✓ Privileged port binding enabled (ports 80, 443)' if current_port_start.stdout | default('1024') | int <= 80 else '• Privileged ports: disabled' }}
+      {{ '✓ Privileged port binding enabled (ports 80, 443)' if enable_privileged_ports | default(false) else '• Privileged ports: disabled' }}

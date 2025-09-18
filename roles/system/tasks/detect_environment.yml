@@ -1,0 +1,30 @@
+---
+- name: Detect if running in container
+  stat:
+    path: /.dockerenv
+  register: dockerenv_check
+
+- name: Check for systemd
+  command: systemctl --version
+  register: systemd_check
+  failed_when: false
+  changed_when: false
+
+- name: Set environment facts
+  set_fact:
+    is_container: "{{ dockerenv_check.stat.exists }}"
+    has_systemd: "{{ systemd_check.rc == 0 }}"
+    is_wsl: "{{ ansible_kernel is search('microsoft|wsl') }}"
+    is_vm: "{{ ansible_virtualization_role == 'guest' }}"
+
+- name: Display environment
+  debug:
+    msg: |
+      Environment Detection:
+      ─────────────────────────────────────────────────
+      Container: {{ is_container }}
+      SystemD: {{ has_systemd }}
+      WSL: {{ is_wsl }}
+      VM: {{ is_vm }}
+      Architecture: {{ ansible_architecture }}
+      OS: {{ ansible_distribution }} {{ ansible_distribution_version }}

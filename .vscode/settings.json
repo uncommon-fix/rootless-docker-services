@@ -1,0 +1,11 @@
+{
+    "ansible.python.interpreterPath": "/bin/python3",
+    "yaml.schemas": {
+        "https://raw.githubusercontent.com/borgmatic-collective/borgmatic/refs/heads/main/borgmatic/config/schema.yaml": [
+            "borgmatic.yaml",
+            "borgmatic/*.yaml",
+            ".borgmatic/*.yml"
+        ],
+        "https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/ansible.json#/$defs/tasks": "file:///home/admin/uncommon_fix_github/ansible-rootless-services/roles/system/tasks/rootless_user/normalize_user.yml"
+    }
+}

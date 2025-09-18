@@ -1,4 +1,7 @@
 ---
+- name: Detect system environment
+  include_tasks: detect_environment.yml
+
 - name: System updates and packages
   block:
   - name: Update package cache first
@@ -25,7 +28,7 @@
       autoremove: yes
       autoclean: yes
       dpkg_options: 'force-confdef,force-confold'
-    when: ansible_os_family == "Debian" and (upgrade_system | default(false))
+    when: ansible_os_family == "Debian" and upgrade_system
     retries: 3
     delay: 10
     become: true
@@ -104,28 +107,13 @@
       set_fact:
         rootless_docker_reboot_required: true
 
-    - name: Prompt for reboot
-      pause:
-        prompt: |
-
-          Rootless Docker Configuration Complete
-          ─────────────────────────────────────────────────
-          The system needs to be rebooted to complete the rootless Docker setup.
-          This ensures:
-          • User lingering takes effect
-          • Subuid/subgid mappings are properly loaded
-          • System Docker services remain disabled
-          
-          Would you like to reboot now? [y/N]
-      register: reboot_choice
-
     - name: Reboot system if requested (non-local connection)
       reboot:
         msg: "Rebooting for rootless Docker setup"
         reboot_timeout: 300
       become: true
       when: 
-        - reboot_choice.user_input | default('n') | lower in ['y', 'yes']
+        - enable_system_reboot
         - ansible_connection != 'local'
 
     - name: Display local reboot notice
@@ -135,7 +123,7 @@
           Please run 'sudo reboot' manually to complete the rootless Docker setup.
           The Ansible playbook cannot automatically reboot when using local connection.
       when: 
-        - reboot_choice.user_input | default('n') | lower in ['y', 'yes']
+        - enable_system_reboot
         - ansible_connection == 'local'
 
     - name: Display reboot notice
@@ -146,4 +134,4 @@
           
           After reboot, you can install rootless Docker by running:
           curl -fsSL https://get.docker.com/rootless | sh
-      when: reboot_choice.user_input | default('n') | lower not in ['y', 'yes']
+      when: not enable_system_reboot

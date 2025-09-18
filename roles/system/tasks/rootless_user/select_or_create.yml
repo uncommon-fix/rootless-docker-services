@@ -19,115 +19,80 @@
       {% for user in user_list %}
       {{ loop.index }}. {{ user[0] }}{% if user[1] and user[1] != '' %} ({{ user[1] }}){% endif %} → {{ user[2] }}
       {% endfor %}
+
+      Options: Enter number (1-{{ user_list | length }}), username, or 'new'
   when: user_list is defined and user_list | length > 0
 
-- name: Prompt for user selection when users exist
-  pause:
-    prompt: |
+- name: Use provided rootless_user_selection or prompt
+  block:
+    - name: Prompt for user selection when not provided
+      pause:
+        prompt: |
 
-      🔧 Rootless User Selection
-      ─────────────────────────────────────────────────
-      Choose an option:
+          🔧 Rootless User Selection
+          ─────────────────────────────────────────────────
+          Choose an option:
 
-      • Enter a number (1-{{ user_list | length }}) to select an existing user
-      • Enter 'new' to create a new user
+          • Enter a number (1-{{ user_list | length }}) to select an existing user
+          • Enter a username directly
+          • Enter 'new' to create a new user
 
-      Your choice
-  register: user_choice
+          Your choice
+      register: user_choice_prompt
+      when: rootless_user_selection is not defined or rootless_user_selection == ""
+
+    - name: Set user choice from variable or prompt
+      set_fact:
+        user_choice: "{{ rootless_user_selection if (rootless_user_selection is defined and rootless_user_selection != '') else user_choice_prompt.user_input }}"
+
   when: user_list is defined and user_list | length > 0
 
-- name: Prompt for new user when no users exist
-  pause:
-    prompt: |
+- name: Handle no existing users case
+  block:
+    - name: Use provided new_user_name or prompt
+      pause:
+        prompt: |
 
-      Create New User
-      ─────────────────────────────────────────────────
-      No existing non-root users found on this system.
+          Create New User
+          ─────────────────────────────────────────────────
+          No existing non-root users found on this system.
 
-      Enter username for new user
-  register: new_user_choice
+          Enter username for new user
+      register: new_user_prompt
+      when: new_user_name is not defined or new_user_name == ""
+
+    - name: Set new username
+      set_fact:
+        user_choice: "new"
+        new_username: "{{ new_user_name if (new_user_name is defined and new_user_name != '') else new_user_prompt.user_input }}"
+
   when: user_list is not defined or user_list | length == 0
 
-- name: Prompt for new user details when 'new' is selected
-  pause:
-    prompt: |
+- name: Process user selection
+  block:
+    - name: Handle numeric selection
+      set_fact:
+        rootless_user: "{{ user_list[user_choice | int - 1][0] }}"
+      when:
+        - user_choice | regex_search('^\d+$')
+        - user_choice | int > 0
+        - user_choice | int <= (user_list | length)
 
-      Create New User
-      ─────────────────────────────────────────────────
-      Enter username for the new user
-  register: new_user_choice
-  when: user_choice is defined and user_choice.user_input is defined and user_choice.user_input | trim == 'new'
+    - name: Handle direct username
+      set_fact:
+        rootless_user: "{{ user_choice }}"
+      when:
+        - user_choice != 'new'
+        - not (user_choice | regex_search('^\d+$'))
+        - user_list | selectattr('0', 'equalto', user_choice) | list | length > 0
 
-- name: Clean user input
-  set_fact:
-    clean_input: "{{ user_choice.user_input | trim }}"
-  when: user_choice is defined and user_choice.user_input is defined
+    - name: Handle new user creation
+      include_tasks: create_new_user.yml
+      when: user_choice == 'new'
 
-- name: Set selected existing user
-  set_fact:
-    rootless_user: "{{ user_list[clean_input | int - 1][0] }}"
-  when: >
-    clean_input is defined and 
-    clean_input | int > 0 and 
-    clean_input | int <= (user_list | length) and
-    clean_input != 'new'
-
-- name: Display selected user
-  debug:
-    msg: "✓ Selected existing user: {{ rootless_user }}"
-  when: >
-    clean_input is defined and 
-    clean_input | int > 0 and 
-    clean_input | int <= (user_list | length) and
-    clean_input != 'new'
-
-- name: Set username from new user choice
-  set_fact:
-    new_username: "{{ new_user_choice.user_input | trim }}"
-  when: new_user_choice is defined and new_user_choice.user_input is defined
-
-- name: Check if new username already exists
-  shell: "getent passwd {{ new_username }}"
-  register: user_exists_check
-  failed_when: false
-  changed_when: false
-  when: new_username is defined
-
-- name: Fail if username already exists
+- name: Validate user selection result
   fail:
     msg: |
-      Error: User '{{ new_username }}' already exists
-      Please run the playbook again and choose a different username.
-  when: new_username is defined and user_exists_check.rc == 0
-
-- name: Prompt for new user password
-  pause:
-    prompt: |
-
-      Set Password
-      ─────────────────────────────────────────────────
-      Enter password for new user '{{ new_username }}'
-      (input will be hidden)
-    echo: false
-  register: new_user_password
-  when: new_username is defined and (user_exists_check.rc is not defined or user_exists_check.rc != 0)
-
-- name: Create new user
-  user:
-    name: "{{ new_username }}"
-    password: "{{ new_user_password.user_input | password_hash('sha512') }}"
-    groups: []
-    shell: /bin/bash
-    create_home: yes
-    state: present
-  when: new_username is defined and new_user_password is defined
-
-- name: Set rootless user to newly created user
-  set_fact:
-    rootless_user: "{{ new_username }}"
-  when: new_username is defined and new_user_password is defined
-
-- name: Display created user
-  debug:
-    msg: "✓ Successfully created new user: {{ new_username }}"
-  when: new_username is defined and new_user_password is defined
+      Invalid user selection: {{ user_choice }}
+      Please provide a valid username, number, or 'new'
+  when: rootless_user is not defined

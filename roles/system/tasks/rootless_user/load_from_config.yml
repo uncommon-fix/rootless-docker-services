@@ -1,38 +1,43 @@
 ---
 - name: Check for existing rootless user fact
   set_fact:
-    existing_rootless_user: "{{ ansible_local.rootless_user.config.user | default(omit) }}"
+    existing_rootless_user: "{{ ansible_local.rootless_user.config.user | default('') }}"
   when:
     - ansible_local is defined
     - ansible_local.rootless_user is defined
     - ansible_local.rootless_user.config is defined
     - ansible_local.rootless_user.config.user is defined
 
-- name: Ask user about existing rootless user
-  pause:
-    prompt: |
+- name: Handle existing configuration
+  block:
+    - name: Use provided choice or prompt about existing user
+      pause:
+        prompt: |
 
-      Found Previous Configuration
-      ─────────────────────────────────────────────────
-      Previously configured rootless user: {{ existing_rootless_user }}
+          Found Previous Configuration
+          ─────────────────────────────────────────────────
+          Previously configured rootless user: {{ existing_rootless_user }}
 
-      Would you like to use this user again?
-      Enter 'y' to continue with {{ existing_rootless_user }}, 'n' to select a different user [default: y]
-  register: use_existing_confirmation
-  when: existing_rootless_user is defined
+          Would you like to use this user again? [Y/n]
+      register: use_existing_prompt
+      when: use_existing_rootless_user is not defined
 
-- name: Load existing rootless user data
-  set_fact:
-    rootless_user: "{{ existing_rootless_user }}"
-    rootless_user_name: "{{ ansible_local.rootless_user.config.user }}"
-    rootless_user_home: "{{ ansible_local.rootless_user.config.home }}"
-    rootless_user_uid: "{{ ansible_local.rootless_user.config.uid }}"
-    rootless_user_gid: "{{ ansible_local.rootless_user.config.gid }}"
-  when:
-    - existing_rootless_user is defined
-    - use_existing_confirmation.user_input | default('y') | lower in ['yes', 'y', '']
+    - name: Set use existing flag
+      set_fact:
+        use_existing: "{{ use_existing_rootless_user if use_existing_rootless_user is defined else ((use_existing_prompt.user_input | default('y') | lower) in ['yes', 'y', '']) }}"
 
-- name: Display loaded rootless user
-  debug:
-    msg: "✓ Loaded existing configuration for user: {{ rootless_user_name }}"
-  when: rootless_user is defined
+    - name: Load existing rootless user data
+      set_fact:
+        rootless_user: "{{ existing_rootless_user }}"
+        rootless_user_name: "{{ ansible_local.rootless_user.config.user }}"
+        rootless_user_home: "{{ ansible_local.rootless_user.config.home }}"
+        rootless_user_uid: "{{ ansible_local.rootless_user.config.uid }}"
+        rootless_user_gid: "{{ ansible_local.rootless_user.config.gid }}"
+      when: use_existing
+
+    - name: Display loaded rootless user
+      debug:
+        msg: "✓ Loaded existing configuration for user: {{ rootless_user_name }}"
+      when: use_existing and rootless_user is defined
+
+  when: existing_rootless_user != ""
