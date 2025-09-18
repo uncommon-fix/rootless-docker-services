@@ -20,11 +20,18 @@
 
           Would you like to use this user again? [Y/n]
       register: use_existing_prompt
-      when: use_existing_rootless_user is not defined
+      when:
+        - use_existing_rootless_user is not defined
+        - rootless_user_selection is not defined or rootless_user_selection == ""
 
-    - name: Set use existing flag
+    - name: Set use existing flag from variables or prompt
       set_fact:
-        use_existing: "{{ use_existing_rootless_user if use_existing_rootless_user is defined else ((use_existing_prompt.user_input | default('y') | lower) in ['yes', 'y', '']) }}"
+        use_existing: >-
+          {{ 
+            true if (rootless_user_selection is defined and rootless_user_selection != "" and rootless_user_selection != "new") 
+            else (use_existing_rootless_user | default(true) if use_existing_rootless_user is defined 
+            else ((use_existing_prompt.user_input | default('y') | lower) in ['yes', 'y', ''])) 
+          }}
 
     - name: Load existing rootless user data
       set_fact:
@@ -40,4 +47,6 @@
         msg: "✓ Loaded existing configuration for user: {{ rootless_user_name }}"
       when: use_existing and rootless_user is defined
 
-  when: existing_rootless_user != ""
+  when:
+    - existing_rootless_user != ""
+    - existing_rootless_user is defined

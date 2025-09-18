@@ -33,6 +33,26 @@
       private: false
       default: "n"
 
+    - name: rootless_user_selection
+      prompt: |
+
+        Rootless User Selection
+        ─────────────────────────────────────────────────
+        Enter existing username, user number, or 'new' to create a user
+        (Leave blank to auto-detect during execution)
+      private: false
+      default: ""
+
+    - name: new_user_name
+      prompt: |
+
+        New User Creation
+        ─────────────────────────────────────────────────
+        enter the username
+      private: false
+      default: ""
+      when: rootless_user_selection == "new"
+
     - name: enable_system_reboot
       prompt: |
 
@@ -53,6 +73,7 @@
         enable_passwordless_sudo: "{{ (enable_passwordless_sudo | default('n') | lower) in ['y', 'yes', 'true'] }}"
         enable_privileged_ports: "{{ (enable_privileged_ports | default('n') | lower) in ['y', 'yes', 'true'] }}"
         enable_system_reboot: "{{ (enable_system_reboot | default('n') | lower) in ['y', 'yes', 'true'] }}"
+        use_existing_rootless_user: true
 
   tasks:
     - name: Initialize Configuration System

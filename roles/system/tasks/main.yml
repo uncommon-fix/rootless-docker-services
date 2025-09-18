@@ -4,31 +4,55 @@
 
 - name: System updates and packages
   block:
-  - name: Update package cache first
+  - name: Check if apt is locked
+    shell: |
+      if fuser /var/lib/dpkg/lock >/dev/null 2>&1; then
+        echo "locked"
+      else
+        echo "unlocked"
+      fi
+    register: apt_lock_check
+    changed_when: false
+
+  - name: Wait for apt lock to be released
+    wait_for:
+      path: /var/lib/dpkg/lock
+      state: absent
+      timeout: 300
+    when: apt_lock_check.stdout == "locked"
+
+  - name: Update package cache with better error handling
     apt:
       update_cache: yes
       cache_valid_time: 3600
+      force_apt_get: yes
     when: ansible_os_family == "Debian"
-    retries: 3
-    delay: 5
+    retries: 5
+    delay: 10
+    register: apt_update_result
+    until: apt_update_result is succeeded
     become: true
 
   - name: Install essential packages
     apt:
       name: "{{ essential_packages }}"
       state: present
+      force_apt_get: yes
     when: ansible_os_family == "Debian"
     retries: 3
     delay: 5
     become: true
 
-  - name: Upgrade all packages
+  - name: Upgrade all packages (conditional)
     apt:
       upgrade: safe
       autoremove: yes
       autoclean: yes
       dpkg_options: 'force-confdef,force-confold'
-    when: ansible_os_family == "Debian" and upgrade_system
+      force_apt_get: yes
+    when: 
+      - ansible_os_family == "Debian" 
+      - upgrade_system | default(false) | bool
     retries: 3
     delay: 10
     become: true
@@ -66,17 +90,6 @@
       become: true
       changed_when: true
 
-    - name: Stop and disable system Docker services
-      systemd:
-        name: "{{ item }}"
-        state: stopped
-        enabled: no
-      loop:
-        - docker.service
-        - docker.socket
-      become: true
-      failed_when: false
-
     - name: Create Docker config directory for rootless user
       file:
         path: "{{ rootless_user_home }}/.config/docker"
@@ -103,9 +116,26 @@
         group: "{{ rootless_user_name }}"
       become: true
 
-    - name: Set reboot requirement flag for rootless Docker setup
-      set_fact:
-        rootless_docker_reboot_required: true
+    - name: Display completion message
+      debug:
+        msg: |
+          
+          ✅ System Preparation Complete
+          ═══════════════════════════════════════════════════════
+          ✓ Docker installed and configured
+          ✓ Rootless user configured: {{ rootless_user_name }}
+          ✓ User permissions set up
+          ✓ Docker daemon configured
+          
+          {% if enable_system_reboot %}
+          🔄 System will reboot automatically to complete setup
+          {% else %}
+          ⚠️  Manual reboot required to complete rootless Docker setup
+          Run: sudo reboot
+          
+          After reboot, install rootless Docker with:
+          curl -fsSL https://get.docker.com/rootless | sh
+          {% endif %}
 
     - name: Reboot system if requested (non-local connection)
       reboot:
@@ -113,7 +143,7 @@
         reboot_timeout: 300
       become: true
       when: 
-        - enable_system_reboot
+        - enable_system_reboot | default(false) | bool
         - ansible_connection != 'local'
 
     - name: Display local reboot notice
@@ -123,15 +153,5 @@
           Please run 'sudo reboot' manually to complete the rootless Docker setup.
           The Ansible playbook cannot automatically reboot when using local connection.
       when: 
-        - enable_system_reboot
+        - enable_system_reboot | default(false) | bool
         - ansible_connection == 'local'
-
-    - name: Display reboot notice
-      debug:
-        msg: |
-          ⚠️  Manual reboot required
-          Please run 'sudo reboot' to complete the rootless Docker setup.
-          
-          After reboot, you can install rootless Docker by running:
-          curl -fsSL https://get.docker.com/rootless | sh
-      when: not enable_system_reboot
