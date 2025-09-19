@@ -1,72 +1,174 @@
 ---
 - hosts: all
   gather_facts: yes
-  vars_prompt:
-    - name: docker_disable_root_services
-      prompt: |
+  
+  tasks:
+    # Initialize configuration system early to load previous choices
+    - name: Initialize Configuration System
+      ansible.builtin.import_role:
+        name: config_secrets
+      become: false
 
-        Root Docker Services Configuration
-        ─────────────────────────────────────────────────
-        Docker may be running as a root service.
-        For rootless operation, these services should be stopped and disabled.
+    # Load previous configuration if it exists and set defaults
+    - name: Set configuration defaults from previous runs
+      set_fact:
+        prev_docker_disable_root_services: "{{ ansible_local.system_config.general.docker_disable_root_services | default('y') }}"
+        prev_enable_passwordless_sudo: "{{ ansible_local.system_config.general.enable_passwordless_sudo | default('n') }}"
+        prev_enable_privileged_ports: "{{ ansible_local.system_config.general.enable_privileged_ports | default('n') }}"
+        prev_rootless_user_selection: "{{ ansible_local.system_config.general.rootless_user_selection | default('') }}"
+        prev_new_user_name: "{{ ansible_local.system_config.general.new_user_name | default('') }}"
+        prev_enable_system_reboot: "{{ ansible_local.system_config.general.enable_system_reboot | default('n') }}"
+      when:
+        - ansible_local is defined
+        - ansible_local.system_config is defined
+        - ansible_local.system_config.general is defined
 
-        Would you like to stop and disable root Docker services? [Y/n]
-      private: false
-      default: "y"
+    - name: Set default values when no previous config exists
+      set_fact:
+        prev_docker_disable_root_services: "y"
+        prev_enable_passwordless_sudo: "n"
+        prev_enable_privileged_ports: "n"
+        prev_rootless_user_selection: ""
+        prev_new_user_name: ""
+        prev_enable_system_reboot: "n"
+      when:
+        - ansible_local is not defined or
+          ansible_local.system_config is not defined or
+          ansible_local.system_config.general is not defined
 
-    - name: enable_passwordless_sudo
-      prompt: |
+    # Interactive prompts for configuration
+    - name: Prompt for Docker root services configuration
+      pause:
+        prompt: |
 
-        Sudo Configuration
-        ─────────────────────────────────────────────────
-        Would you like to enable passwordless sudo?
-        This allows running sudo commands without password prompts. [y/N]
-      private: false
-      default: "n"
+          Root Docker Services Configuration
+          ─────────────────────────────────────────────────
+          Docker may be running as a root service.
+          For rootless operation, these services should be stopped and disabled.
 
-    - name: enable_privileged_ports
-      prompt: |
+          Would you like to stop and disable root Docker services? [Y/n]
+          (Previous choice: {{ prev_docker_disable_root_services }})
+          
+          Press Enter for default [{{ prev_docker_disable_root_services }}]:
+      register: docker_disable_input
 
-        Network Port Configuration
-        ─────────────────────────────────────────────────
-        Allow binding to privileged ports (80, 443)?
-        This enables running web services on standard HTTP/HTTPS ports. [y/N]
-      private: false
-      default: "n"
+    - name: Set docker_disable_root_services
+      set_fact:
+        docker_disable_root_services_raw: "{{ docker_disable_input.user_input | default(prev_docker_disable_root_services) }}"
 
-    - name: rootless_user_selection
-      prompt: |
+    - name: Prompt for sudo configuration
+      pause:
+        prompt: |
 
-        Rootless User Selection
-        ─────────────────────────────────────────────────
-        Enter existing username, user number, or 'new' to create a user
-        (Leave blank to auto-detect during execution)
-      private: false
-      default: ""
+          Sudo Configuration
+          ─────────────────────────────────────────────────
+          Would you like to enable passwordless sudo?
+          This allows running sudo commands without password prompts. [y/N]
+          (Previous choice: {{ prev_enable_passwordless_sudo }})
+          
+          Press Enter for default [{{ prev_enable_passwordless_sudo }}]:
+      register: passwordless_sudo_input
 
-    - name: new_user_name
-      prompt: |
+    - name: Set enable_passwordless_sudo
+      set_fact:
+        enable_passwordless_sudo_raw: "{{ passwordless_sudo_input.user_input | default(prev_enable_passwordless_sudo) }}"
 
-        New User Creation
-        ─────────────────────────────────────────────────
-        If you selected 'new' above, enter the username
-        (Leave blank if not creating a new user)
-      private: false
-      default: ""
+    - name: Prompt for privileged ports configuration
+      pause:
+        prompt: |
 
-    - name: enable_system_reboot
-      prompt: |
+          Network Port Configuration
+          ─────────────────────────────────────────────────
+          Allow binding to privileged ports (80, 443)?
+          This enables running web services on standard HTTP/HTTPS ports. [y/N]
+          (Previous choice: {{ prev_enable_privileged_ports }})
+          
+          Press Enter for default [{{ prev_enable_privileged_ports }}]:
+      register: privileged_ports_input
 
-        System Reboot Configuration
-        ─────────────────────────────────────────────────
-        The system needs to be rebooted to complete the rootless Docker setup.
-        This ensures proper configuration takes effect.
-        
-        Would you like to reboot automatically? [y/N]
-      private: false
-      default: "n"
+    - name: Set enable_privileged_ports
+      set_fact:
+        enable_privileged_ports_raw: "{{ privileged_ports_input.user_input | default(prev_enable_privileged_ports) }}"
 
-  pre_tasks:
+    - name: Prompt for rootless user selection
+      pause:
+        prompt: |
+
+          Rootless User Selection
+          ─────────────────────────────────────────────────
+          Enter existing username, user number, or 'new' to create a user
+          (Leave blank to auto-detect during execution)
+          (Previous choice: {{ prev_rootless_user_selection if prev_rootless_user_selection != '' else 'auto-detect' }})
+          
+          Press Enter for default [{{ prev_rootless_user_selection if prev_rootless_user_selection != '' else 'auto-detect' }}]:
+      register: rootless_user_input
+
+    - name: Set rootless_user_selection
+      set_fact:
+        rootless_user_selection: "{{ rootless_user_input.user_input | default(prev_rootless_user_selection) }}"
+
+    - name: Prompt for new user name
+      pause:
+        prompt: |
+
+          New User Creation
+          ─────────────────────────────────────────────────
+          If you selected 'new' above, enter the username
+          (Leave blank if not creating a new user)
+          (Previous choice: {{ prev_new_user_name if prev_new_user_name != '' else 'none' }})
+          
+          Press Enter for default [{{ prev_new_user_name if prev_new_user_name != '' else 'none' }}]:
+      register: new_user_input
+
+    - name: Set new_user_name
+      set_fact:
+        new_user_name: "{{ new_user_input.user_input | default(prev_new_user_name) }}"
+
+    - name: Prompt for system reboot configuration
+      pause:
+        prompt: |
+
+          System Reboot Configuration
+          ─────────────────────────────────────────────────
+          The system needs to be rebooted to complete the rootless Docker setup.
+          This ensures proper configuration takes effect.
+          
+          Would you like to reboot automatically? [y/N]
+          (Previous choice: {{ prev_enable_system_reboot }})
+          
+          Press Enter for default [{{ prev_enable_system_reboot }}]:
+      register: system_reboot_input
+
+    - name: Set enable_system_reboot
+      set_fact:
+        enable_system_reboot_raw: "{{ system_reboot_input.user_input | default(prev_enable_system_reboot) }}"
+
+    # Normalize boolean variables from strings
+    - name: Normalize configuration variables
+      set_fact:
+        docker_disable_root_services: "{{ (docker_disable_root_services_raw | default('y') | lower) in ['y', 'yes', 'true'] }}"
+        enable_passwordless_sudo: "{{ (enable_passwordless_sudo_raw | default('n') | lower) in ['y', 'yes', 'true'] }}"
+        enable_privileged_ports: "{{ (enable_privileged_ports_raw | default('n') | lower) in ['y', 'yes', 'true'] }}"
+        enable_system_reboot: "{{ (enable_system_reboot_raw | default('n') | lower) in ['y', 'yes', 'true'] }}"
+        use_existing_rootless_user: true
+
+    # Store the configuration choices for future runs
+    - name: Store system configuration choices
+      include_role:
+        name: config_secrets
+        tasks_from: store_fact.yml
+      vars:
+        fact_name: "system_config"
+        fact_section: "general"
+        fact_value:
+          docker_disable_root_services: "{{ docker_disable_root_services | ternary('y', 'n') }}"
+          enable_passwordless_sudo: "{{ enable_passwordless_sudo | ternary('y', 'n') }}"
+          enable_privileged_ports: "{{ enable_privileged_ports | ternary('y', 'n') }}"
+          rootless_user_selection: "{{ rootless_user_selection | default('') }}"
+          new_user_name: "{{ new_user_name | default('') }}"
+          enable_system_reboot: "{{ enable_system_reboot | ternary('y', 'n') }}"
+          last_run: "{{ ansible_date_time.iso8601 }}"
+    
     # Check sudo access early
     - name: Test sudo access
       command: sudo -n true
@@ -82,21 +184,6 @@
       when: 
         - sudo_test.rc != 0
         - ansible_become_password is not defined
-
-    # Normalize boolean variables from strings
-    - name: Normalize configuration variables
-      set_fact:
-        docker_disable_root_services: "{{ (docker_disable_root_services | default('y') | lower) in ['y', 'yes', 'true'] }}"
-        enable_passwordless_sudo: "{{ (enable_passwordless_sudo | default('n') | lower) in ['y', 'yes', 'true'] }}"
-        enable_privileged_ports: "{{ (enable_privileged_ports | default('n') | lower) in ['y', 'yes', 'true'] }}"
-        enable_system_reboot: "{{ (enable_system_reboot | default('n') | lower) in ['y', 'yes', 'true'] }}"
-        use_existing_rootless_user: true
-
-  tasks:
-    - name: Initialize Configuration System
-      ansible.builtin.import_role:
-        name: config_secrets
-      become: false
 
     - name: System Setup
       ansible.builtin.import_role:

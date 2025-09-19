@@ -97,22 +97,25 @@
       debug:
         msg: |
           
-          ✅ System Preparation Complete
+          System Preparation Complete
           ═══════════════════════════════════════════════════════
           ✓ Docker installed and configured
           ✓ Rootless user configured: {{ rootless_user_name }}
           ✓ User permissions set up
           ✓ Docker daemon configured
           
-          {% if enable_system_reboot %}
-          🔄 System will reboot automatically to complete setup
-          {% else %}
-          ⚠️  Manual reboot required to complete rootless Docker setup
+          {{ reboot_message }}
+      vars:
+        reboot_message: >-
+          {%- if enable_system_reboot -%}
+          System will reboot automatically to complete setup
+          {%- else -%}
+          Manual reboot required to complete rootless Docker setup
           Run: sudo reboot
           
           After reboot, install rootless Docker with:
           curl -fsSL https://get.docker.com/rootless | sh
-          {% endif %}
+          {%- endif %}
 
     - name: Reboot system if requested (non-local connection)
       reboot:

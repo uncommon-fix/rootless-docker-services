@@ -6,10 +6,10 @@
   register: fact_files
   no_log: true
 
-- name: Load custom facts manually
-  include_vars:
-    file: "{{ item.path }}"
-    name: "temp_fact_{{ item.path | basename | regex_replace('\\.fact$', '') }}"
+- name: Read custom fact files from remote
+  slurp:
+    src: "{{ item.path }}"
+  register: fact_file_contents
   loop: "{{ fact_files.files }}"
   when: fact_files.files | length > 0
   no_log: true
@@ -18,12 +18,15 @@
 
 - name: Build ansible_local structure from custom facts
   set_fact:
-    ansible_local: "{{ ansible_local | default({}) | combine({item.path | basename | regex_replace('\\.fact$', ''): vars['temp_fact_' + (item.path | basename | regex_replace('\\.fact$', ''))]}) }}"
-  loop: "{{ fact_files.files }}"
-  when: fact_files.files | length > 0
+    ansible_local: "{{ ansible_local | default({}) | combine({item.item.path | basename | regex_replace('\\.fact$', ''): (item.content | b64decode | from_yaml)}) }}"
+  loop: "{{ fact_file_contents.results | default([]) }}"
+  when:
+    - fact_file_contents.results is defined
+    - fact_file_contents.results | length > 0
+    - not item.skipped | default(false)
   no_log: true
   loop_control:
-    label: "{{ item.path | basename }}" # Show only filename instead of full file details
+    label: "{{ item.item.path | basename }}" # Show only filename instead of full file details
 
 - name: Find all secret files
   find:
