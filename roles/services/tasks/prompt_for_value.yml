@@ -16,19 +16,24 @@
   pause:
     prompt: "{{ prompt_message }}"
     echo: false
-  register: user_input
+  register: password_input
   when: field_type == "password"
 
 - name: Prompt for non-password field
   pause:
     prompt: "{{ prompt_message }}"
-  register: user_input
+  register: regular_input
   when: field_type != "password"
 
-- name: Set user input value
+- name: Set user input value from password field
   set_fact:
-    input_value: "{{ user_input.user_input }}"
-  when: user_input is defined
+    input_value: "{{ password_input.user_input }}"
+  when: password_input is defined and not password_input.skipped | default(false)
+
+- name: Set user input value from regular field
+  set_fact:
+    input_value: "{{ regular_input.user_input }}"
+  when: regular_input is defined and not regular_input.skipped | default(false)
 
 - name: Validate input
   fail:
