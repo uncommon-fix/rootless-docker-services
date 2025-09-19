@@ -25,6 +25,11 @@
   register: user_input
   when: field_type != "password"
 
+- name: Set user input value
+  set_fact:
+    input_value: "{{ user_input.user_input }}"
+  when: user_input is defined
+
 - name: Validate input
   fail:
     msg: "{{ validation_messages[field_type] | default('Invalid input') }}"
@@ -38,20 +43,20 @@
       url: "Please enter a valid URL (http:// or https://)"
       port: "Please enter a valid port number (1-65535)"
   when: >
-    user_input is defined and (
-      (field_type == "string" and user_input.user_input == "") or
-      (field_type == "password" and user_input.user_input == "") or
-      (field_type == "boolean" and user_input.user_input not in ["true", "false", "yes", "no", "y", "n"]) or
-      (field_type == "email" and not (user_input.user_input | regex_search('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'))) or
-      (field_type == "port" and not (user_input.user_input | regex_search('^[0-9]+$') and user_input.user_input | int >= 1 and user_input.user_input | int <= 65535))
+    input_value is defined and (
+      (field_type == "string" and input_value == "") or
+      (field_type == "password" and input_value == "") or
+      (field_type == "boolean" and input_value not in ["true", "false", "yes", "no", "y", "n"]) or
+      (field_type == "email" and not (input_value | regex_search('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'))) or
+      (field_type == "port" and not (input_value | regex_search('^[0-9]+$') and input_value | int >= 1 and input_value | int <= 65535))
     )
 
 - name: Normalize boolean values
   set_fact:
-    normalized_input: "{{ 'true' if user_input.user_input.lower() in ['true', 'yes', 'y'] else 'false' }}"
-  when: field_type == "boolean" and user_input is defined
+    normalized_input: "{{ 'true' if input_value.lower() in ['true', 'yes', 'y'] else 'false' }}"
+  when: field_type == "boolean" and input_value is defined
 
 - name: Set field value
   set_fact:
-    field_value: "{{ normalized_input if (field_type == 'boolean' and normalized_input is defined) else user_input.user_input }}"
-  when: user_input is defined
+    field_value: "{{ normalized_input if (field_type == 'boolean' and normalized_input is defined) else input_value }}"
+  when: input_value is defined
